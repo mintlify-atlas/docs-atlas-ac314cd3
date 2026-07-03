@@ -1,0 +1,179 @@
+---
+title: "Navbar — Authenticated App Navigation Bar Component"
+sidebarTitle: "Navbar"
+description: "A Bootstrap dark navbar with active-link highlighting, authenticated username display, and a logout action that clears state and redirects to login."
+---
+
+The `Navbar` component is the persistent top navigation bar rendered across every protected page of the Heroes App. It provides links to the Marvel, DC, and Search sections, displays the currently logged-in user's name, and exposes a Logout button that clears authentication state and redirects to the login screen. Because `Navbar` sits inside `HeroesRoutes` — which is only reachable through `PrivateRoute` — it is never shown to unauthenticated users.
+
+## Where Navbar lives
+
+`Navbar` is mounted once, at the top of `HeroesRoutes`, above the `<Routes>` definition:
+
+```jsx
+// src/Heroes/routes/HeroesRoutes.jsx
+import { Navbar } from "../../ui";
+
+export const HeroesRoutes = () => (
+  <>
+    <Navbar />
+    <div className="container">
+      <Routes>
+        <Route path="marvel"    element={<MarvelPage />} />
+        <Route path="dc"        element={<DcPage />} />
+        <Route path="search"    element={<SearchPage />} />
+        <Route path="hero/:id"  element={<HeroPage />} />
+        <Route path="/"         element={<Navigate to="/marvel" />} />
+      </Routes>
+    </div>
+  </>
+);
+```
+
+The `HeroesRoutes` component is itself protected by `PrivateRoute` inside `AppRouter`, so `Navbar` is guaranteed to render only for authenticated sessions.
+
+## Navigation links
+
+The navbar contains four navigation targets:
+
+<CardGroup cols={2}>
+  <Card title="Heroes (Brand)" icon="house">
+    A plain `<Link>` with the `navbar-brand` class pointing to `/`. Clicking it returns to the root route, which immediately redirects to `/marvel`.
+  </Card>
+  <Card title="Marvel → /marvel" icon="m">
+    A `<NavLink>` that highlights as active when the current path starts with `/marvel`. Renders the Marvel heroes listing.
+  </Card>
+  <Card title="DC → /dc" icon="d">
+    A `<NavLink>` that highlights as active when the current path starts with `/dc`. Renders the DC heroes listing.
+  </Card>
+  <Card title="Search → /search" icon="magnifying-glass">
+    A `<NavLink>` pointing to the search page. Becomes active when the URL is `/search` (with or without a `?q=` query string).
+  </Card>
+</CardGroup>
+
+## Active link styling
+
+The three `<NavLink>` components use the `className` callback form to apply Bootstrap's `active` class to whichever link matches the current URL:
+
+```jsx
+<NavLink
+  className={({ isActive }) =>
+    `nav-item nav-link ${isActive ? "active" : ""}`
+  }
+  to="/marvel"
+>
+  Marvel
+</NavLink>
+```
+
+React Router v6 provides the `isActive` boolean automatically. When `true`, the rendered element receives both `nav-item nav-link` (Bootstrap) and `active` (Bootstrap active-state highlight) — no manual comparison or `useLocation` call is needed.
+
+## Right-side user section
+
+The right side of the navbar reads the authenticated user object from `AuthContext` and renders the name alongside a Logout button:
+
+```jsx
+<ul className="navbar-nav ml-auto">
+  <span className="nav-item nav-link text-primary">{user?.name}</span>
+  <button className="nav-item nav-link btn" onClick={onLogout}>
+    Logout
+  </button>
+</ul>
+```
+
+`user?.name` uses optional chaining so the span renders as empty if `user` is `null` or `undefined`, preventing a runtime error during any brief window where auth state is still initialising.
+
+## Logout flow
+
+When the user clicks the Logout button, `onLogout` runs a two-step process:
+
+```jsx
+const onLogout = () => {
+  logout();                              // 1. Clear auth state
+  navigate("/login", { replace: true }); // 2. Redirect to login
+};
+```
+
+<Steps>
+  <Step title="Clear authentication state">
+    `logout()` is provided by `AuthContext`. Inside `AuthProvider` it removes the `"user"` key from `localStorage` and dispatches a `types.logout` action to the `authReducer`, setting `logged: false` and `user: null`.
+  </Step>
+  <Step title="Redirect to /login with replace">
+    `navigate("/login", { replace: true })` replaces the current history entry instead of pushing a new one. This prevents the user from pressing the browser's Back button and returning to a protected page after logging out.
+  </Step>
+</Steps>
+
+<Note>
+  Because the navigation uses `replace: true`, the protected route the user was on is removed from the browser history stack. If they press Back they will land on whatever page was before they entered the app — typically an external page or a blank tab — rather than triggering a re-authentication loop.
+</Note>
+
+## Props
+
+`Navbar` accepts no props. All data it needs — `user`, `logout` — is read directly from `AuthContext` via `useContext`:
+
+```jsx
+const { user, logout } = useContext(AuthContext);
+```
+
+This keeps the component self-contained and means it does not need to be threaded through from a parent.
+
+## Full component source
+
+```jsx
+// src/ui/components/Navbar.jsx
+import { useContext } from "react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import { AuthContext } from "../../auth/context/AuthContext";
+
+export const Navbar = () => {
+  const { user, logout } = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  const onLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
+  return (
+    <nav className="navbar navbar-expand-sm navbar-dark bg-dark p-2">
+      <Link className="navbar-brand" to="/">Heroes</Link>
+      <div className="navbar-collapse">
+        <div className="navbar-nav">
+          <NavLink
+            className={({ isActive }) =>
+              `nav-item nav-link ${isActive ? "active" : ""}`
+            }
+            to="/marvel"
+          >
+            Marvel
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              `nav-item nav-link ${isActive ? "active" : ""}`
+            }
+            to="/dc"
+          >
+            DC
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              `nav-item nav-link ${isActive ? "active" : ""}`
+            }
+            to="/search"
+          >
+            Search
+          </NavLink>
+        </div>
+      </div>
+      <div className="navbar-collapse collapse w-100 order-3 dual-collapse2 d-flex justify-content-end">
+        <ul className="navbar-nav ml-auto">
+          <span className="nav-item nav-link text-primary">{user?.name}</span>
+          <button className="nav-item nav-link btn" onClick={onLogout}>
+            Logout
+          </button>
+        </ul>
+      </div>
+    </nav>
+  );
+};
+```

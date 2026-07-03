@@ -1,0 +1,200 @@
+---
+title: "useForm — Generic Controlled Form State Hook"
+sidebarTitle: "useForm"
+description: "A lightweight React hook that manages controlled form state, handles input changes by name, and exposes a reset utility for any field schema."
+---
+
+The `useForm` hook is a reusable, generic solution for managing controlled form state in React. Instead of writing `useState` and change-handler boilerplate for every form in the application, `useForm` accepts an initial field map and returns each field value directly alongside a unified `onInputChange` handler and an `onResetForm` utility — keeping form components concise and consistent across the app.
+
+## Source
+
+```js
+// src/hooks/useForm.js
+import { useState } from 'react';
+
+export const useForm = ( initialForm = {} ) => {
+
+    const [ formState, setFormState ] = useState( initialForm );
+
+    const onInputChange = ({ target }) => {
+        const { name, value } = target;
+        setFormState({
+            ...formState,
+            [ name ]: value
+        });
+    }
+
+    const onResetForm = () => {
+        setFormState( initialForm );
+    }
+
+    return {
+        ...formState,
+        formState,
+        onInputChange,
+        onResetForm,
+    }
+}
+```
+
+## Parameter
+
+<ParamField path="initialForm" type="object" default="{}">
+  An object whose keys represent form field names and whose values are the corresponding initial values. Every key in this object becomes a field tracked by the hook. Pass an empty object `{}` to start with no fields.
+
+  ```js
+  // Example shapes
+  useForm({ searchText: '' })
+  useForm({ name: '', email: '', age: 0 })
+  ```
+</ParamField>
+
+## Return Value
+
+The hook spreads all `initialForm` fields directly into the returned object, so each field is accessible by name without any nesting. It also exposes the raw state object and both handlers.
+
+<ResponseField name="[field]" type="any">
+  Each key from `initialForm` is spread at the top level of the return value. For example, if you pass `{ searchText: '' }`, the hook returns `searchText` directly — not `formState.searchText`. Destructure the field names you need as you would any other return value.
+</ResponseField>
+
+<ResponseField name="formState" type="object">
+  The complete form state object. Use this when you need to read all fields at once — for example, when submitting a form or passing the full payload to another function.
+</ResponseField>
+
+<ResponseField name="onInputChange" type="(event: React.ChangeEvent) => void">
+  An event handler to pass directly to any `<input>`, `<select>`, or `<textarea>` element via its `onChange` prop. Internally it reads `event.target.name` and `event.target.value` and updates only the matching field, leaving all other fields untouched.
+
+  <Note>
+    Every input element wired to `onInputChange` **must** have a `name` attribute whose value matches the corresponding key in `initialForm`. If the `name` is missing or mismatched, a new key will be created in `formState` rather than updating the intended field.
+  </Note>
+</ResponseField>
+
+<ResponseField name="onResetForm" type="() => void">
+  Resets all form fields back to the values originally passed in `initialForm`. Useful for "Cancel" buttons, form submission success handlers, or any scenario where the form should return to its default state.
+</ResponseField>
+
+## How `onInputChange` Works
+
+When an input fires a change event, `onInputChange` destructures `name` and `value` from `event.target`, then calls `setFormState` with a shallow merge that overwrites the matching key:
+
+```js
+const onInputChange = ({ target }) => {
+    const { name, value } = target;
+    setFormState({
+        ...formState,   // keep all existing field values
+        [ name ]: value // overwrite only the changed field
+    });
+}
+```
+
+This means a single handler manages every input in the form — no per-field `onChange` wrappers needed.
+
+## Usage Example
+
+The example below shows a two-field registration form with `name` and `email`. Notice how the `name` attribute on each `<input>` matches the key passed to `useForm`.
+
+<CodeGroup>
+
+```jsx Multi-Field Form
+import { useForm } from '../hooks/useForm';
+
+export const RegisterForm = () => {
+  const { name, email, formState, onInputChange, onResetForm } = useForm({
+    name: '',
+    email: '',
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    console.log('Submitting:', formState); // { name: '...', email: '...' }
+    onResetForm();                         // clear after submit
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="text"
+        name="name"          // must match initialForm key
+        value={name}
+        onChange={onInputChange}
+        placeholder="Hero name"
+      />
+      <input
+        type="email"
+        name="email"         // must match initialForm key
+        value={email}
+        onChange={onInputChange}
+        placeholder="Email address"
+      />
+      <button type="submit">Register</button>
+      <button type="button" onClick={onResetForm}>Reset</button>
+    </form>
+  );
+};
+```
+
+```jsx Single-Field Form
+import { useForm } from '../hooks/useForm';
+
+export const SearchBar = () => {
+  const { query, onInputChange, onResetForm } = useForm({ query: '' });
+
+  return (
+    <div>
+      <input
+        type="text"
+        name="query"
+        value={query}
+        onChange={onInputChange}
+        placeholder="Search heroes..."
+      />
+      <button onClick={onResetForm}>Clear</button>
+    </div>
+  );
+};
+```
+
+</CodeGroup>
+
+## Real-World Example: SearchPage
+
+Heroes App's `SearchPage` uses `useForm` with a single `searchText` field that is pre-populated from the URL query parameter `q`. This lets the search input stay in sync with the browser's address bar on page load:
+
+```jsx
+// src/Heroes/pages/SearchPage.jsx
+const [searchParams] = useSearchParams();
+const q = searchParams.get('q') || '';
+
+const { searchText, onInputChange } = useForm({
+  searchText: q,  // initialized from URL query param
+});
+
+// ...
+
+<input
+  type="text"
+  name="searchText"   // matches the initialForm key
+  value={searchText}
+  onChange={onInputChange}
+/>
+```
+
+<Tip>
+  Initialising `useForm` with a value derived from `useSearchParams` (or any other source) is perfectly valid — just make sure the value is available synchronously at render time. Because `useState` only uses its initial value on the **first** render, changes to the URL after mount will not automatically update the field; you would need to handle that separately with a `useEffect` if required.
+</Tip>
+
+## Naming Tip
+
+Because `useForm` spreads field keys at the top level of its return value, you can destructure them by name just like any other variable:
+
+```js
+// ✅ Direct access — idiomatic and concise
+const { searchText, onInputChange } = useForm({ searchText: '' });
+console.log(searchText);
+
+// ❌ Unnecessary nesting — formState is available but not needed here
+const { formState } = useForm({ searchText: '' });
+console.log(formState.searchText);
+```
+
+Use `formState` only when you need to pass the entire field set to another function (such as a form submission handler) — for individual field reads, rely on the spread values.

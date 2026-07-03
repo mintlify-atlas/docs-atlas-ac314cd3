@@ -1,0 +1,209 @@
+---
+title: "Heroes App Project Structure and Module Guide"
+sidebarTitle: "Project Structure"
+description: "A complete walkthrough of the Heroes App directory layout, covering every src/ module, static assets convention, and the tests/ folder organization."
+---
+
+Heroes App follows a feature-based folder structure where each major concern — authentication, hero data, routing, and shared UI — lives in its own directory under `src/`. This layout keeps related files co-located and makes it easy to navigate the codebase as the app scales. The tree below shows the full project layout, followed by a detailed explanation of each module.
+
+## Directory Tree
+
+```
+Heroes_App/
+├── public/
+│   ├── _redirects
+│   ├── favicon.png
+│   └── heroes/          # 20 hero images: dc-batman.jpg, marvel-spider.jpg …
+├── src/
+│   ├── HeroesApp.jsx    # Root component: AuthProvider + AppRouter
+│   ├── main.jsx         # Entry point: HashRouter + HeroesApp
+│   ├── styles.css       # Global CSS including .my-card styles
+│   ├── auth/
+│   │   ├── context/
+│   │   │   ├── AuthContext.jsx   # createContext()
+│   │   │   ├── AuthProvider.jsx  # useReducer + login/logout + localStorage
+│   │   │   ├── authReducer.js    # handles types.login / types.logout
+│   │   │   └── index.js
+│   │   ├── pages/
+│   │   │   └── LoginPage.jsx     # Single login button, redirects after login
+│   │   ├── types/
+│   │   │   └── types.js          # { login: '[Auth] Login', logout: '[Auth] Logout' }
+│   │   └── index.js
+│   ├── Heroes/
+│   │   ├── components/
+│   │   │   ├── HeroCard.jsx      # Card: image, name, alter_ego, first_appearance
+│   │   │   ├── HeroList.jsx      # Filtered hero list by publisher
+│   │   │   └── index.js
+│   │   ├── data/
+│   │   │   └── heroes.js         # Static array of 20 hero objects
+│   │   ├── helpers/
+│   │   │   ├── getHeroById.js
+│   │   │   ├── getHeroesByName.js
+│   │   │   ├── getHeroesByPublisher.js
+│   │   │   └── index.js
+│   │   ├── pages/
+│   │   │   ├── DcPage.jsx        # <HeroList publisher="DC Comics" />
+│   │   │   ├── MarvelPage.jsx    # <HeroList publisher="Marvel Comics" />
+│   │   │   ├── HeroPage.jsx      # Detail page using useParams :id
+│   │   │   ├── SearchPage.jsx    # Search with query-string ?q=
+│   │   │   └── index.js
+│   │   ├── routes/
+│   │   │   └── HeroesRoutes.jsx  # /marvel, /dc, /search, /hero/:id + Navbar
+│   │   └── index.js
+│   ├── hooks/
+│   │   └── useForm.js            # Generic controlled-form state hook
+│   ├── router/
+│   │   ├── AppRouter.jsx         # Top-level: /login (public) + /* (private)
+│   │   ├── PrivateRoute.jsx      # Redirects to /login if not authenticated
+│   │   └── PublicRoute.jsx       # Redirects to /marvel if already authenticated
+│   └── ui/
+│       ├── components/
+│       │   ├── Navbar.jsx        # Nav with Marvel / DC / Search links + logout
+│       │   └── index.js
+│       └── index.js
+├── tests/                        # Jest + RTL test files mirroring src/
+├── babel.config.cjs
+├── eslint.config.js
+├── jest.config.cjs
+├── index.html
+└── package.json
+```
+
+## Entry Points
+
+**`src/main.jsx`** is the Webpack entry point rendered into `index.html`. It wraps `HeroesApp` in `React.StrictMode` and a `HashRouter`, which means every route in the app is prefixed with `#/` — enabling deployment to any static host without server-side rewrites.
+
+**`src/HeroesApp.jsx`** is the root React component. It composes `AuthProvider` (which makes auth state available everywhere) around `AppRouter` (which renders the appropriate page based on the current URL).
+
+---
+
+## `src/auth/` — Authentication Module
+
+The `auth/` module owns everything related to user sessions: the React context, the reducer, the login page, and action type constants.
+
+<CardGroup cols={2}>
+  <Card title="context/" icon="circle-nodes">
+    **`AuthContext.jsx`** creates the bare React context object. **`AuthProvider.jsx`** wraps the app, initializes state from `localStorage`, and exposes `login` and `logout` dispatch helpers via the context value. **`authReducer.js`** is a pure reducer that handles the two action types.
+  </Card>
+  <Card title="pages/" icon="file">
+    **`LoginPage.jsx`** renders a single login button. On click it dispatches the login action with a hardcoded user object `{ id: '123', name: 'Luis Fernandez' }`, which `AuthProvider` persists to `localStorage` before redirecting to `/#/marvel`.
+  </Card>
+  <Card title="types/" icon="tag">
+    **`types.js`** exports a plain object of action type string constants — `'[Auth] Login'` and `'[Auth] Logout'` — used by both the reducer and the provider to avoid magic strings.
+  </Card>
+  <Card title="index.js" icon="arrow-up-right-from-square">
+    Each `index.js` re-exports the module's public API, so consumers import from `'../auth'` rather than deep paths like `'../auth/context/AuthProvider'`.
+  </Card>
+</CardGroup>
+
+---
+
+## `src/Heroes/` — Hero Feature Module
+
+This is the largest feature module. It contains all hero data, display components, helper functions, page-level components, and private route definitions.
+
+### `data/`
+
+`heroes.js` exports a static JavaScript array of 20 hero objects. Each object has fields like `id`, `superhero`, `publisher`, `alter_ego`, `first_appearance`, and `characters`. Because there is no API, this file is the single source of truth for all hero information.
+
+### `helpers/`
+
+Three focused utility functions operate on the heroes array:
+
+| Helper | Purpose |
+|---|---|
+| `getHeroById(id)` | Returns the single hero object whose `id` matches, or `undefined` |
+| `getHeroesByPublisher(publisher)` | Filters the array to heroes matching `"Marvel Comics"` or `"DC Comics"` |
+| `getHeroesByName(name)` | Case-insensitive filter across the `superhero` field, used by the search page |
+
+### `components/`
+
+- **`HeroCard.jsx`** — Renders a Bootstrap card for a single hero. Displays the hero's image (from `public/heroes/`), name, alter ego, and first appearance, and links to the detail page at `/hero/:id`.
+- **`HeroList.jsx`** — Accepts a `publisher` prop, calls `getHeroesByPublisher`, and renders a responsive grid of `HeroCard` components.
+
+### `pages/`
+
+| Page | Route | Description |
+|---|---|---|
+| `MarvelPage.jsx` | `/marvel` | Renders `<HeroList publisher="Marvel Comics" />` |
+| `DcPage.jsx` | `/dc` | Renders `<HeroList publisher="DC Comics" />` |
+| `HeroPage.jsx` | `/hero/:id` | Reads `:id` via `useParams`, looks up the hero, and shows a full-width detail view with a back button |
+| `SearchPage.jsx` | `/search` | Reads `?q=` from the URL via `query-string`, calls `getHeroesByName`, and renders results in real time |
+
+### `routes/`
+
+`HeroesRoutes.jsx` declares the four private routes above using React Router v6 `<Routes>` and also renders the shared `Navbar` component at the top of every private page.
+
+---
+
+## `src/hooks/` — Shared Hooks
+
+`useForm.js` is a reusable custom hook that manages controlled-input form state. It accepts an initial values object and returns the current field values plus an `onInputChange` handler, making it easy to bind to any `<input>` without repeating `useState` boilerplate. It is used by `SearchPage` to manage the search input field.
+
+---
+
+## `src/router/` — Top-Level Routing
+
+| File | Responsibility |
+|---|---|
+| `AppRouter.jsx` | Renders the top-level `<Routes>`: the public `/login` path and a catch-all `/*` private route |
+| `PublicRoute.jsx` | Wraps public pages — if the user is already authenticated it redirects to `/#/marvel` |
+| `PrivateRoute.jsx` | Wraps private pages — if the user is not authenticated it redirects to `/#/login` |
+
+This two-guard pattern ensures that visiting any private URL while logged out always lands on the login page, and visiting the login page while logged in always bounces to the app.
+
+---
+
+## `src/ui/` — Shared UI Components
+
+The `ui/` module holds UI components that are not tied to a specific feature. Currently this contains a single component:
+
+**`Navbar.jsx`** renders the top navigation bar shown on all private pages. It includes links to the Marvel, DC, and Search pages, displays the logged-in user's name, and provides a **Logout** button that dispatches the logout action and clears `localStorage`.
+
+---
+
+## `public/heroes/` — Hero Images
+
+All 20 hero portrait images live in `public/heroes/` and follow a strict naming convention:
+
+```
+public/heroes/<publisher>-<hero-id>.jpg
+```
+
+Examples: `marvel-spider.jpg`, `dc-batman.jpg`, `marvel-iron.jpg`, `dc-wonderwoman.jpg`.
+
+`HeroCard.jsx` constructs the image `src` path at runtime using the hero's `id` field, so adding a new hero only requires dropping the correctly named image into this folder and adding the hero object to `heroes.js`.
+
+<Tip>
+  The `public/_redirects` file configures Netlify (and compatible hosts) to serve `index.html` for all routes, which is necessary even with `HashRouter` to handle direct URL navigation and page refreshes.
+</Tip>
+
+---
+
+## `tests/` — Test Suite
+
+The `tests/` directory mirrors the `src/` folder structure so every source file has a predictable test counterpart. Tests are written with Jest as the runner and React Testing Library for component rendering and DOM assertions.
+
+```
+tests/
+├── auth/
+├── Heroes/
+│   ├── components/
+│   ├── helpers/
+│   └── pages/
+├── hooks/
+├── router/
+└── ui/
+```
+
+Configuration files at the project root wire everything together:
+
+| File | Purpose |
+|---|---|
+| `jest.config.cjs` | Points Jest at the `tests/` directory and configures the jsdom test environment |
+| `babel.config.cjs` | Enables Babel to transform JSX and ESM imports so Jest can parse React components |
+| `eslint.config.js` | Enforces code style rules across both `src/` and `tests/` |
+
+<Note>
+  Run `npm test` to start Jest in `--watchAll` mode during development. For a single CI run, execute `npx jest` directly or add a dedicated `test:ci` script to `package.json`.
+</Note>

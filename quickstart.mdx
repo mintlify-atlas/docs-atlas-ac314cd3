@@ -1,47 +1,106 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Quickstart: Run Heroes App in Under 5 Minutes"
+sidebarTitle: "Quickstart"
+description: "Clone the Heroes App repo, install dependencies, and launch the Vite dev server to start browsing Marvel and DC heroes on localhost in minutes."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+Getting Heroes App running locally takes only a few commands. The app has no backend service or environment variables to configure — once dependencies are installed you can start the dev server and immediately explore the hero catalog. Follow the steps below to go from zero to a running app.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Clone the Repository">
+    Pull the source code from GitHub and move into the project directory.
 
     ```bash
-    npm install your-package
+    git clone https://github.com/ludwiigdev/Heroes_App.git
+    cd Heroes_App
     ```
+
+    This creates a local `Heroes_App/` folder containing the full project source, including all static hero images in `public/heroes/`.
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
-    ```
+  <Step title="Install Dependencies">
+    Install all Node.js dependencies declared in `package.json`. Use whichever package manager you prefer.
+
+    <CodeGroup>
+      ```bash npm
+      npm install
+      ```
+
+      ```bash yarn
+      yarn install
+      ```
+    </CodeGroup>
+
+    Key packages installed include React 19, React Router DOM v6, Bootstrap 5.3, and the Jest + React Testing Library suite for tests.
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+
+  <Step title="Start the Development Server">
+    Launch the Vite dev server. It starts almost instantly thanks to Vite's native ESM dev mode.
 
     ```bash
-    your-cli start
+    npm run dev
     ```
+
+    You should see output similar to:
+
+    ```
+      VITE v5.x.x  ready in ~300ms
+
+      ➜  Local:   http://localhost:5173/
+      ➜  Network: use --host to expose
+    ```
+
+    <Tip>
+      Because Heroes App uses `HashRouter`, the actual entry point is `http://localhost:5173/#/`. Navigating to the bare `http://localhost:5173/` will automatically redirect you there.
+    </Tip>
+  </Step>
+
+  <Step title="Open the App and Log In">
+    Open [http://localhost:5173/#/login](http://localhost:5173/#/login) in your browser. You will see the Heroes App login page.
+
+    Click the **Login** button — no username or password is required. The app stores the following user object in `localStorage` and redirects you to the Marvel heroes page:
+
+    ```json
+    {
+      "id": "123",
+      "name": "Luis Fernandez"
+    }
+    ```
+
+    After login you land on `/#/marvel` where you can browse the Marvel hero catalog, switch to DC Comics via the navbar, or search across all heroes.
+
+    <Note>
+      This login flow is intentionally simplified to demonstrate React context-based auth and protected routing. There is no real credential check or API call involved.
+    </Note>
+  </Step>
+
+  <Step title="Build for Production (Optional)">
+    When you're ready to create an optimized production bundle, run the build command. The output is written to the `dist/` directory.
+
+    <CodeGroup>
+      ```bash Build
+      npm run build
+      ```
+
+      ```bash Preview Build Locally
+      npm run preview
+      ```
+    </CodeGroup>
+
+    `npm run preview` spins up a local static server pointing at `dist/` so you can verify the production build before deploying. The `public/_redirects` file included in the repo configures redirect rules for static hosts such as Netlify.
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Running Tests
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+The project ships with a Jest + React Testing Library suite. Run it in watch mode with:
+
+```bash
+npm test
+```
+
+This executes `jest --watchAll`, which re-runs affected tests on every file save. Test files live in the `tests/` directory and mirror the `src/` folder structure.
+
+<Tip>
+  To run the test suite once without watch mode (useful in CI), use `npx jest` or add a `"test:ci": "jest"` script to your `package.json`.
 </Tip>

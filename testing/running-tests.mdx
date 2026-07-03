@@ -1,0 +1,265 @@
+---
+title: "Running Tests: Commands, Watch Mode & Writing New Tests"
+sidebarTitle: "Running Tests"
+description: "How to run the Heroes App test suite locally and in CI, use Jest watch-mode shortcuts, and write new unit and component tests from scratch."
+---
+
+Heroes App ships with a single `npm test` command that starts Jest in interactive watch mode, making it quick to iterate while developing. This page covers every way to invoke the test suite — from a full watched run to targeted single-file execution — and then walks through writing both a pure helper test and a component test that requires router and context setup.
+
+## Running the Test Suite
+
+### Available commands
+
+| Command | What it does |
+|---|---|
+| `npm test` | Starts Jest in `--watchAll` mode (re-runs on every file save) |
+| `npx jest --watchAll=false` | Runs the full suite once and exits — ideal for CI pipelines |
+| `npx jest --coverage` | Runs the full suite and generates a coverage report in `coverage/` |
+| `npx jest tests/auth/context/authReducer.test.js` | Runs a single test file by path |
+
+<CodeGroup>
+```bash Watch mode (development)
+npm test
+```
+
+```bash Single file
+npx jest tests/auth/context/authReducer.test.js
+```
+
+```bash CI (one-shot, no watch)
+npx jest --watchAll=false
+```
+
+```bash Coverage report
+npx jest --coverage
+```
+</CodeGroup>
+
+<Note>
+  The `"test"` script in `package.json` is defined as `"jest --watchAll"`, so `npm test` will never exit on its own. Use `npx jest --watchAll=false` in CI environments or pre-commit hooks.
+</Note>
+
+---
+
+## Watch Mode Keyboard Shortcuts
+
+When Jest is running in watch mode it displays an interactive menu. These keyboard shortcuts let you narrow the run without restarting:
+
+| Key | Action |
+|---|---|
+| `a` | Run **all** tests |
+| `f` | Run only **failing** tests |
+| `p` | Filter by **filename** pattern |
+| `t` | Filter by **test name** pattern |
+| `u` | Update failing **snapshots** |
+| `q` | **Quit** watch mode |
+
+<Tip>
+  Press `p` and type `authReducer` to instantly focus the run on the reducer tests while you work on authentication logic. Press `a` to return to the full suite.
+</Tip>
+
+---
+
+## Writing a New Unit Test (Helper Function)
+
+The following walkthrough creates a test file for `getHeroesByName` — a helper that filters the hero list by a partial name match. It returns an empty array when given an empty string, a filtered array on a partial match, and an empty array when nothing matches.
+
+<Steps>
+  <Step title="Create the test file">
+    Mirror the source path under `tests/`. The helper lives at `src/Heroes/helpers/getHeroesByName.js`, so the test file goes at `tests/Heroes/helpers/getHeroesByName.test.js`.
+
+    ```bash
+    # From the project root
+    mkdir -p tests/Heroes/helpers
+    touch tests/Heroes/helpers/getHeroesByName.test.js
+    ```
+  </Step>
+
+  <Step title="Import the function under test">
+    Open the new file and add the import. Use the same module path style as the rest of the project.
+
+    ```js
+    import { getHeroesByName } from "../../../src/Heroes/helpers/getHeroesByName";
+    ```
+  </Step>
+
+  <Step title="Open a describe block">
+    Group all related cases under a single `describe` so the output is easy to read in the terminal.
+
+    ```js
+    describe("getHeroesByName helper", () => {
+      // test cases go here
+    });
+    ```
+  </Step>
+
+  <Step title="Test the empty-string case">
+    When called with an empty string the function should return an empty array, preventing an accidental full-list dump.
+
+    ```js
+    test("debe retornar un arreglo vacío si el query es vacío", () => {
+      const heroes = getHeroesByName("");
+      expect(heroes).toEqual([]);
+    });
+    ```
+  </Step>
+
+  <Step title="Test a partial match">
+    A query of `"bat"` should match at least Batman. Check that the returned array is non-empty and that every entry's `superhero` field contains the search term (case-insensitive).
+
+    ```js
+    test("debe retornar héroes que coincidan parcialmente", () => {
+      const heroes = getHeroesByName("bat");
+      expect(heroes.length).toBeGreaterThanOrEqual(1);
+      heroes.forEach((hero) => {
+        expect(hero.superhero.toLowerCase()).toContain("bat");
+      });
+    });
+    ```
+  </Step>
+
+  <Step title="Test the no-match case">
+    A query that matches nothing should return an empty array, not `undefined` or `null`.
+
+    ```js
+    test("debe retornar un arreglo vacío si no hay coincidencia", () => {
+      const heroes = getHeroesByName("xkcd_no_hero_xyz");
+      expect(heroes).toEqual([]);
+    });
+    ```
+  </Step>
+
+  <Step title="Run the new test file">
+    Confirm everything passes before committing.
+
+    ```bash
+    npx jest tests/Heroes/helpers/getHeroesByName.test.js
+    ```
+
+    You should see three passing tests. The complete file looks like this:
+
+    ```js
+    import { getHeroesByName } from "../../../src/Heroes/helpers/getHeroesByName";
+
+    describe("getHeroesByName helper", () => {
+      test("debe retornar un arreglo vacío si el query es vacío", () => {
+        expect(getHeroesByName("")).toEqual([]);
+      });
+
+      test("debe retornar héroes que coincidan parcialmente", () => {
+        const heroes = getHeroesByName("bat");
+        expect(heroes.length).toBeGreaterThanOrEqual(1);
+        heroes.forEach((hero) => {
+          expect(hero.superhero.toLowerCase()).toContain("bat");
+        });
+      });
+
+      test("debe retornar un arreglo vacío si no hay coincidencia", () => {
+        expect(getHeroesByName("xkcd_no_hero_xyz")).toEqual([]);
+      });
+    });
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Writing a Component Test (with AuthContext)
+
+Components that read from `AuthContext` and use React Router hooks need a bit more setup than pure helpers. The pattern below is extracted directly from `Navbar.test.jsx` and works for any component with the same dependencies.
+
+### The setup
+
+Two things must be in place before rendering:
+
+1. **Mock `useNavigate`** at the module level so the function returned by the hook is a trackable `jest.fn()` instead of the real router implementation.
+2. **Wrap the component** in both `AuthContext.Provider` (to supply the context value) and `MemoryRouter` (to satisfy any internal `<Link>` or `useNavigate` calls).
+
+```jsx
+import { fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { AuthContext } from "../../../src/auth/context/AuthContext";
+import { Navbar } from "../../../src/ui/components/Navbar";
+
+// 1. Mock useNavigate before any test runs
+const mockNavigate = jest.fn();
+jest.mock("react-router-dom", () => ({
+  ...jest.requireActual("react-router-dom"), // keep everything else intact
+  useNavigate: () => mockNavigate,
+}));
+
+describe("Pruebas en el <Navbar/>", () => {
+  // 2. Define a context value that represents a logged-in user
+  const contextValue = {
+    logged: true,
+    user: { name: "Fernando" },
+    logout: jest.fn(),
+  };
+
+  // 3. Clear all mocks before each test to avoid cross-test contamination
+  beforeEach(() => jest.clearAllMocks());
+
+  test("debe de mostrar el nombre del usuario logueado", () => {
+    render(
+      <AuthContext.Provider value={contextValue}>
+        <MemoryRouter>
+          <Navbar />
+        </MemoryRouter>
+      </AuthContext.Provider>
+    );
+
+    expect(screen.getByText("Fernando")).toBeTruthy();
+  });
+
+  test("debe de llamar el logout y navigate cuando se hace click en el boton", () => {
+    render(
+      <AuthContext.Provider value={contextValue}>
+        <MemoryRouter>
+          <Navbar />
+        </MemoryRouter>
+      </AuthContext.Provider>
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(contextValue.logout).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith("/login", { replace: true });
+  });
+});
+```
+
+---
+
+## Common Gotchas
+
+<Accordion title="Must mock useNavigate for components that call it">
+  If a component calls `useNavigate()` internally and you don't mock it, Jest will throw because the real implementation requires a router context that isn't always present at the right scope. Always hoist the mock to the module level — **before** any `describe` block — using `jest.mock("react-router-dom", ...)`.
+
+  ```js
+  const mockedUseNavigate = jest.fn();
+  jest.mock("react-router-dom", () => ({
+    ...jest.requireActual("react-router-dom"),
+    useNavigate: () => mockedUseNavigate,
+  }));
+  ```
+</Accordion>
+
+<Accordion title="Must wrap routing-dependent components in MemoryRouter">
+  Any component that renders a `<Link>`, `<NavLink>`, `<Navigate>`, or calls a router hook (`useParams`, `useLocation`, `useNavigate`) will throw *"You should not use `<Link>` outside a `<Router>`"* if rendered without a router context. Always wrap with `<MemoryRouter>`.
+
+  ```jsx
+  render(
+    <MemoryRouter initialEntries={["/search?q=batman"]}>
+      <SearchPage />
+    </MemoryRouter>
+  );
+  ```
+
+  Use `initialEntries` to simulate a specific URL when the component reads from `useSearchParams` or `useLocation`.
+</Accordion>
+
+<Accordion title="CSS imports are handled by identity-obj-proxy">
+  Vite handles CSS Modules at build time, but Jest doesn't run through Vite. Without a mock, `import styles from './Hero.module.css'` throws a syntax error. `identity-obj-proxy` is mapped via `moduleNameMapper` in `jest.config.cjs` to intercept those imports and return an object whose keys match whatever class name is accessed — so `styles.card` returns the string `"card"` and no error is thrown.
+
+  You do **not** need to add anything to individual test files for this to work; the proxy operates globally for all tests.
+</Accordion>

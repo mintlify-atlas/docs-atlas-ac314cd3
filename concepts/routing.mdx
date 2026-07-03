@@ -1,0 +1,224 @@
+---
+title: "Routing Architecture and Navigation in Heroes App"
+sidebarTitle: "Routing"
+description: "Explore Heroes App's two-level HashRouter setup, full route table, public/private guards, dynamic hero routes, and Netlify SPA fallback config."
+---
+
+Heroes App uses React Router v6 with a `HashRouter` at its root and a deliberate two-level route architecture: a top-level `AppRouter` that splits traffic between public and private zones, and a nested `HeroesRoutes` that handles all the feature pages behind authentication. Understanding how these layers compose — and why a hash-based router was chosen — is the key to navigating (pun intended) the codebase.
+
+## Why HashRouter?
+
+Most React SPAs use `BrowserRouter`, which relies on the HTML5 History API and clean URLs like `/marvel`. The catch is that on a static host (Netlify, GitHub Pages, S3), a user who refreshes the browser or pastes a deep link directly into the address bar triggers a real HTTP request for that path — and the server returns a 404 because the file doesn't exist.
+
+`HashRouter` sidesteps this entirely by placing the application path after a `#` in the URL (e.g., `/#/marvel`). The browser never sends the fragment to the server, so every request lands on `index.html` and React Router handles the rest.
+
+```jsx
+// src/main.jsx
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <HashRouter>
+      <HeroesApp />
+    </HashRouter>
+  </React.StrictMode>
+);
+```
+
+<Note>
+  If you ever migrate to a server that supports URL rewriting (Vercel, a custom Express server, etc.) you can swap `HashRouter` for `BrowserRouter` without changing any route definitions. The `_redirects` file described below handles the Netlify case if you prefer clean URLs.
+</Note>
+
+---
+
+## The `_redirects` File
+
+For deployments that prefer clean URLs over hash URLs, a `_redirects` file in the `public/` directory instructs Netlify (and compatible CDNs) to serve `index.html` for every path that doesn't match a static asset:
+
+```
+# public/_redirects
+/*    /index.html   200
+```
+
+This makes `/marvel`, `/dc`, and `/hero/dc-batman` all resolve to the SPA, with React Router then handling the in-app navigation.
+
+<Tip>
+  The `_redirects` file is copied to the build output unchanged because Vite treats everything in `public/` as a static asset. No Vite plugin or extra config is needed.
+</Tip>
+
+---
+
+## Route Table
+
+The following table lists every navigable path in the application, which component renders it, and whether it is guarded.
+
+| Path | Component | Guard | Notes |
+|---|---|---|---|
+| `/login` | `LoginPage` | `PublicRoute` | Redirects to `/marvel` if already logged in |
+| `/marvel` | `MarvelPage` | `PrivateRoute` | Lists all Marvel heroes |
+| `/dc` | `DcPage` | `PrivateRoute` | Lists all DC Comics heroes |
+| `/search` | `SearchPage` | `PrivateRoute` | Accepts `?q=` query param |
+| `/hero/:id` | `HeroPage` | `PrivateRoute` | `:id` is a hero id like `dc-batman` |
+| `/` | *(redirect)* | `PrivateRoute` | Immediately navigates to `/marvel` |
+
+---
+
+## Two-Level Router Architecture
+
+The routing is intentionally split into two files with clearly separated responsibilities.
+
+### Level 1 — AppRouter
+
+`AppRouter` is the gatekeeper. It knows about exactly two routes: the public login page and everything else. "Everything else" is delegated wholesale to `HeroesRoutes`, wrapped in `PrivateRoute`.
+
+```jsx
+// src/router/AppRouter.jsx
+export const AppRouter = () => (
+  <Routes>
+    <Route path="login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+    <Route path="/*" element={<PrivateRoute><HeroesRoutes /></PrivateRoute>} />
+  </Routes>
+);
+```
+
+The `/*` wildcard ensures that any path other than `/login` is captured and passed to `PrivateRoute`. If the user is not logged in, they are redirected to `/login` before `HeroesRoutes` ever mounts.
+
+### Level 2 — HeroesRoutes
+
+`HeroesRoutes` renders the persistent `Navbar` and then a nested `<Routes>` block for the actual content pages. It only ever mounts if `PrivateRoute` has already confirmed the user is authenticated.
+
+```jsx
+// src/Heroes/routes/HeroesRoutes.jsx
+export const HeroesRoutes = () => (
+  <>
+    <Navbar />
+    <div className="container">
+      <Routes>
+        <Route path="marvel" element={<MarvelPage />} />
+        <Route path="dc" element={<DcPage />} />
+        <Route path="search" element={<SearchPage />} />
+        <Route path="hero/:id" element={<HeroPage />} />
+        <Route path="/" element={<Navigate to="/marvel" />} />
+      </Routes>
+    </div>
+  </>
+);
+```
+
+<Note>
+  Because `HeroesRoutes` is rendered under the `/*` wildcard in `AppRouter`, the paths here are **relative** — `marvel` matches `/#/marvel`, not `/#/marvel/marvel`.
+</Note>
+
+### Component tree overview
+
+```
+HashRouter
+└── HeroesApp
+    └── AuthProvider          (auth context)
+        └── AppRouter
+            ├── /login → PublicRoute → LoginPage
+            └── /*    → PrivateRoute → HeroesRoutes
+                                         ├── Navbar
+                                         ├── /marvel  → MarvelPage
+                                         ├── /dc      → DcPage
+                                         ├── /search  → SearchPage
+                                         ├── /hero/:id → HeroPage
+                                         └── /        → Navigate /marvel
+```
+
+---
+
+## Route Guards
+
+Both guards are thin wrappers that read `logged` from `AuthContext` and either render `children` or issue a redirect.
+
+<CardGroup cols={2}>
+  <Card title="PrivateRoute" icon="lock">
+    Renders `children` when `logged === true`. Otherwise it saves the attempted path to `localStorage` as `"lastPath"` and redirects to `/login`.
+  </Card>
+  <Card title="PublicRoute" icon="lock-open">
+    Renders `children` when `logged === false`. An authenticated user who visits `/login` is immediately bounced to `/marvel`.
+  </Card>
+</CardGroup>
+
+For the full implementation and the `lastPath` redirect flow, see the [Authentication](/concepts/authentication) concept page.
+
+---
+
+## Dynamic Route: `/hero/:id`
+
+`HeroPage` uses the `:id` URL parameter to look up a specific hero from the in-memory dataset.
+
+```jsx
+// src/Heroes/pages/HeroPage.jsx (usage example)
+import { useParams } from "react-router-dom";
+import { getHeroById } from "../helpers/getHeroById";
+
+export const HeroPage = () => {
+  const { id } = useParams();          // e.g. "dc-batman"
+  const hero = getHeroById(id);
+
+  if (!hero) return <Navigate to="/marvel" />;
+
+  return (
+    // render hero details...
+  );
+};
+```
+
+The `id` parameter follows the convention `{publisher-slug}-{hero-slug}` (e.g., `dc-batman`, `marvel-spider`). If `getHeroById` returns `undefined` — because someone typed a non-existent id in the URL — the page falls back to `/marvel` rather than crashing.
+
+For a full breakdown of hero ids and the helper functions, see the [Hero Data](/concepts/hero-data) concept page.
+
+---
+
+## Navigation with NavLink
+
+The `Navbar` component uses React Router's `NavLink` instead of plain `Link` so it can apply an active CSS class to the currently matched route.
+
+```jsx
+// src/Heroes/components/Navbar.jsx (usage example)
+import { NavLink, useNavigate } from "react-router-dom";
+import { useContext } from "react";
+import { AuthContext } from "../../auth/context/AuthContext";
+
+export const Navbar = () => {
+  const { user, logout } = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  const onLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
+  return (
+    <nav className="navbar navbar-expand-sm navbar-dark bg-dark">
+      <NavLink className="navbar-brand" to="/marvel">HeroesApp</NavLink>
+      <div className="navbar-nav">
+        <NavLink
+          className={({ isActive }) => `nav-item nav-link ${isActive ? "active" : ""}`}
+          to="/marvel"
+        >
+          Marvel
+        </NavLink>
+        <NavLink
+          className={({ isActive }) => `nav-item nav-link ${isActive ? "active" : ""}`}
+          to="/dc"
+        >
+          DC
+        </NavLink>
+        <NavLink
+          className={({ isActive }) => `nav-item nav-link ${isActive ? "active" : ""}`}
+          to="/search"
+        >
+          Search
+        </NavLink>
+      </div>
+      <div className="navbar-nav ms-auto">
+        <span className="nav-item nav-link text-info">{user?.name}</span>
+        <button className="nav-item nav-link btn" onClick={onLogout}>Logout</button>
+      </div>
+    </nav>
+  );
+};
+```
+
+`NavLink`'s `className` prop accepts a function that receives `{ isActive }` — this is a React Router v6 API that replaces the v5 `activeClassName` prop. The ternary injects the Bootstrap `active` class when the route matches.

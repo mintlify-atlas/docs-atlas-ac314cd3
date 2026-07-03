@@ -1,0 +1,65 @@
+{
+  "projectType": "frontend",
+  "projectName": "Heroes App",
+  "projectDescription": "A React single-page application for browsing and searching Marvel and DC Comics superheroes, featuring authentication, protected routes, and real-time hero search.",
+  "theme": "palm",
+  "primaryColor": "#040404",
+  "lightColor": "#0b7ba3",
+  "darkColor": "#6cc0d7",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart", "project-structure"]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": ["concepts/authentication", "concepts/routing", "concepts/hero-data"]
+          },
+          {
+            "group": "Components & Pages",
+            "pages": ["components/hero-card", "components/hero-list", "components/navbar", "components/pages-overview"]
+          },
+          {
+            "group": "Hooks & Helpers",
+            "pages": ["helpers/use-form", "helpers/hero-helpers"]
+          },
+          {
+            "group": "Testing",
+            "pages": ["testing/overview", "testing/running-tests"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Marvel and DC Comics hero catalog with 20 heroes",
+    "Real-time hero search by name using query string parameters",
+    "Context-based authentication with localStorage persistence",
+    "Protected routes using PrivateRoute and PublicRoute guards",
+    "Hero detail pages with alter ego, publisher, and first appearance info",
+    "Responsive card-based UI with CSS animations",
+    "React Router v6 hash-based navigation",
+    "Jest + React Testing Library test suite"
+  ],
+  "publicApiSurface": [
+    "getHeroById(id: string): Hero | undefined",
+    "getHeroesByName(name: string): Hero[]",
+    "getHeroesByPublisher(publisher: string): Hero[]",
+    "useForm(initialForm: object): { formState, onInputChange, onResetForm, ...fields }",
+    "AuthContext: { logged, user, login(name), logout() }",
+    "AuthProvider: React context provider component",
+    "authReducer(state, action): AuthState",
+    "HeroCard: React component — { id, superhero, alter_ego, first_appearance, characters }",
+    "HeroList: React component — { publisher: 'DC Comics' | 'Marvel Comics' }",
+    "Navbar: React component (reads AuthContext)",
+    "AppRouter: top-level router component",
+    "PrivateRoute: route guard component — redirects to /login if not logged in",
+    "PublicRoute: route guard component — redirects to /marvel if already logged in",
+    "HeroesRoutes: nested routes for /marvel, /dc, /search, /hero/:id",
+    "types: { login: '[Auth] Login', logout: '[Auth] Logout' }"
+  ]
+}

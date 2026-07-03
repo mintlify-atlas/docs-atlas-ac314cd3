@@ -1,0 +1,148 @@
+---
+title: "HeroList — Publisher-Filtered Hero Grid Component"
+sidebarTitle: "HeroList"
+description: "Renders a responsive grid of HeroCard components filtered by publisher, memoized to prevent unnecessary recomputation on re-renders."
+---
+
+`HeroList` is the container component responsible for turning a publisher name into a full, animated grid of hero cards. It accepts a single `publisher` prop, delegates the data-fetching work to `getHeroesByPublisher`, and renders one `HeroCard` per result inside a responsive Bootstrap grid. The filtered list is wrapped in `useMemo` so that React only re-runs the filter when the `publisher` value actually changes — not on every parent re-render.
+
+## Props
+
+<ParamField path="publisher" type="string" required>
+  The name of the comic publisher to display. Must be exactly one of the two accepted values below. Any other string causes `getHeroesByPublisher` to throw an `Error`.
+
+  | Accepted value | Page that uses it |
+  |---|---|
+  | `"Marvel Comics"` | `MarvelPage` (`/marvel`) |
+  | `"DC Comics"` | `DcPage` (`/dc`) |
+</ParamField>
+
+## Memoization with useMemo
+
+`getHeroesByPublisher` iterates over the full `heroes` array on every call. To avoid repeating that work when the parent re-renders for unrelated reasons (e.g. context updates from `AuthContext`), the result is memoized:
+
+```jsx
+const heroes = useMemo(() => getHeroesByPublisher(publisher), [publisher]);
+```
+
+The dependency array `[publisher]` means the filtered list is only recomputed when the `publisher` prop value changes — for example, when the user navigates between the `/marvel` and `/dc` routes.
+
+<Note>
+  Because the hero dataset is static (imported from `src/Heroes/data/heroes.js` at build time), memoization here is primarily a best-practice guard rather than a critical performance optimization. It becomes more impactful if the dataset grows or if filtering logic is made more expensive in the future.
+</Note>
+
+## Bootstrap grid layout
+
+The wrapping `<div>` applies three Bootstrap 5 utility classes to create a responsive card grid:
+
+```jsx
+<div className="row rows-cols-1 row-cols-md-3 g-3">
+  {heroes.map((hero) => (
+    <HeroCard key={hero.id} {...hero} />
+  ))}
+</div>
+```
+
+| Class | Effect |
+|---|---|
+| `row` | Creates a flex-row Bootstrap grid container |
+| `row-cols-1` | One card per row on mobile (< 768 px) |
+| `row-cols-md-3` | Three cards per row on medium screens (≥ 768 px) and above |
+| `g-3` | Adds `1rem` gutters between cards in both axes |
+
+## Delegation to HeroCard
+
+`HeroList` itself renders no hero UI — it purely maps data to `HeroCard` instances. Every property from the hero object (`id`, `superhero`, `alter_ego`, `first_appearance`, `characters`) is spread onto `HeroCard` with `{...hero}`, and the `id` is also used as the React list `key`:
+
+```jsx
+{heroes.map((hero) => (
+  <HeroCard key={hero.id} {...hero} />
+))}
+```
+
+See the [HeroCard documentation](/components/hero-card) for details on how each prop is rendered.
+
+## Error handling
+
+`getHeroesByPublisher` validates the publisher name before filtering:
+
+```js
+// src/Heroes/helpers/getHeroesByPublisher.js
+export const getHeroesByPublisher = (publisher) => {
+  const validPublishers = ["DC Comics", "Marvel Comics"];
+  if (!validPublishers.includes(publisher)) {
+    throw new Error(`${publisher} is not a valid publisher`);
+  }
+  return heroes.filter((heroe) => heroe.publisher === publisher);
+};
+```
+
+If you pass an unrecognised publisher string the error bubbles up through `useMemo` and will be caught by the nearest React error boundary (or crash the component tree in development).
+
+<Tip>
+  Always use the exact casing shown above. `"marvel comics"` or `"DC"` will both throw. If you are building a feature that allows dynamic publisher selection, validate the value before passing it to `HeroList`.
+</Tip>
+
+## Usage examples
+
+<CodeGroup>
+
+```jsx Marvel page
+import { HeroList } from "../components";
+
+export const MarvelPage = () => (
+  <>
+    <h1 className="text-center mt-5">Marvel Comics</h1>
+    <hr />
+    <HeroList publisher="Marvel Comics" />
+  </>
+);
+```
+
+```jsx DC page
+import { HeroList } from "../components";
+
+export const DcPage = () => (
+  <>
+    <h1 className="text-center mt-5">Dc Comics</h1>
+    <hr />
+    <HeroList publisher="DC Comics" />
+  </>
+);
+```
+
+```jsx Dynamic publisher (with validation)
+import { HeroList } from "../components";
+
+const VALID_PUBLISHERS = ["Marvel Comics", "DC Comics"];
+
+export const PublisherPage = ({ publisher }) => {
+  if (!VALID_PUBLISHERS.includes(publisher)) {
+    return <p>Unknown publisher: {publisher}</p>;
+  }
+  return <HeroList publisher={publisher} />;
+};
+```
+
+</CodeGroup>
+
+## Full component source
+
+```jsx
+// src/Heroes/components/HeroList.jsx
+import { HeroCard } from "./";
+import { getHeroesByPublisher } from "../helpers";
+import { useMemo } from "react";
+
+export const HeroList = ({ publisher }) => {
+  const heroes = useMemo(() => getHeroesByPublisher(publisher), [publisher]);
+
+  return (
+    <div className="row rows-cols-1 row-cols-md-3 g-3">
+      {heroes.map((hero) => (
+        <HeroCard key={hero.id} {...hero} />
+      ))}
+    </div>
+  );
+};
+```

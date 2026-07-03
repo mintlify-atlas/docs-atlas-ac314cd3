@@ -1,0 +1,240 @@
+---
+title: "Hero Data Model, Helpers, and Image Assets Guide"
+sidebarTitle: "Hero Data"
+description: "Understand the Hero object shape, id naming convention, image asset paths, the three helper functions, and the full catalogue of all 20 heroes."
+---
+
+All hero data in Heroes App is stored as a plain JavaScript array exported from `src/Heroes/data/heroes.js`. There is no API call, no database, and no async loading — the entire catalogue of 20 heroes is bundled with the application and queried synchronously at runtime. This page documents the Hero object shape, the id naming convention, how images are resolved, and the three helper functions that form the data access layer.
+
+---
+
+## Hero Object Shape
+
+Each entry in the `heroes` array is a plain object with six fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique identifier following the `{publisher-slug}-{hero-slug}` convention. Used as the URL param and image filename. |
+| `superhero` | `string` | The hero's well-known superhero name (e.g., `"Batman"`, `"Spider-Man"`). |
+| `publisher` | `string` | Either `"DC Comics"` or `"Marvel Comics"`. |
+| `alter_ego` | `string` | The primary civilian identity (e.g., `"Bruce Wayne"`, `"Peter Parker"`). |
+| `first_appearance` | `string` | The comic title and issue number where this hero debuted. |
+| `characters` | `string` | Comma-separated list of all identities that have held the mantle. May equal `alter_ego` for single-identity heroes. |
+
+### Example entry
+
+```js
+// src/Heroes/data/heroes.js (excerpt)
+{
+  id: 'dc-flash',
+  superhero: 'Flash',
+  publisher: 'DC Comics',
+  alter_ego: 'Jay Garrick',
+  first_appearance: 'Flash Comics #1',
+  characters: 'Jay Garrick, Barry Allen, Wally West, Bart Allen',
+}
+```
+
+### `alter_ego` vs `characters`
+
+<Accordion title="Why are there two identity fields?">
+  `alter_ego` records the original or most prominent civilian identity — the one most readers associate with the name. `characters` is a broader, comma-separated list of every person who has carried that superhero identity across publication history.
+
+  For single-identity heroes like Batman (`Bruce Wayne`) both fields are identical. For legacy heroes like The Flash, `alter_ego` is `"Jay Garrick"` (the first Flash) while `characters` lists all four successors.
+
+  The `HeroCard` component uses this distinction to decide whether to render the characters line: it only displays `characters` when the value differs from `alter_ego`, avoiding redundant information.
+
+  ```jsx
+  // Pseudo-code for HeroCard rendering logic
+  {characters !== alter_ego && (
+    <p className="card-text">
+      <small className="text-muted">{characters}</small>
+    </p>
+  )}
+  ```
+</Accordion>
+
+---
+
+## ID Naming Convention
+
+Hero ids follow a strict `{publisher-slug}-{hero-slug}` pattern:
+
+- **Publisher slug** — `dc` for DC Comics, `marvel` for Marvel Comics.
+- **Hero slug** — a short lowercase keyword derived from the hero's name (not the alter ego).
+
+```
+dc-batman        ← "Batman"         → DC Comics
+dc-wonder        ← "Wonder Woman"   → DC Comics
+marvel-spider    ← "Spider-Man"     → Marvel Comics
+marvel-iron      ← "Iron Man"       → Marvel Comics
+```
+
+<Note>
+  The hero slug is intentionally short and does not always mirror the full superhero name. `dc-green` maps to Green Lantern (not Green Arrow, which is `dc-arrow`), and `marvel-silver` maps to Silver Surfer. When adding new heroes, choose an unambiguous slug and document it here.
+</Note>
+
+---
+
+## Hero Image Assets
+
+Every hero has a corresponding JPEG image served from the `public/` directory. Because files in `public/` are copied to the build output root without transformation, the URL is simply:
+
+```
+/heroes/{id}.jpg
+```
+
+For example:
+
+| Hero id | Image URL |
+|---|---|
+| `dc-batman` | `/heroes/dc-batman.jpg` |
+| `marvel-spider` | `/heroes/marvel-spider.jpg` |
+| `dc-wonder` | `/heroes/dc-wonder.jpg` |
+
+In JSX this is referenced as a static string — no `import` is needed because the file lives in `public/`, not `src/`:
+
+```jsx
+<img
+  src={`/heroes/${hero.id}.jpg`}
+  alt={hero.superhero}
+  className="card-img-top"
+/>
+```
+
+<Tip>
+  When adding a new hero, name the image file `{id}.jpg` (matching the `id` field exactly) and drop it into `public/heroes/`. The rest of the UI will pick it up automatically because the path is derived from `id` at render time.
+</Tip>
+
+---
+
+## Helper Functions
+
+Three helper functions provide all data access. They are pure functions — no side effects, no async operations.
+
+### `getHeroById(id)`
+
+Finds a single hero by its exact id.
+
+```js
+// src/Heroes/helpers/getHeroById.js
+export const getHeroById = (id) => heroes.find(hero => hero.id === id);
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | `string` | The hero's id, e.g. `"dc-batman"`. |
+
+**Returns:** The matching hero object, or `undefined` if no hero has that id.
+
+**Edge case:** When `id` is `undefined` or does not match any entry, `Array.find` returns `undefined`. `HeroPage` handles this by redirecting to `/marvel`:
+
+```js
+const hero = getHeroById(id);
+if (!hero) return <Navigate to="/marvel" />;
+```
+
+---
+
+### `getHeroesByName(name)`
+
+Searches for heroes whose `superhero` name contains the query string (case-insensitive).
+
+```js
+// src/Heroes/helpers/getHeroesByName.js
+export const getHeroesByName = (name = "") => {
+  name = name.toLocaleLowerCase().trim();
+  if (name.length === 0) return [];
+  return heroes.filter(hero => hero.superhero.toLocaleLowerCase().includes(name));
+};
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `name` | `string` | `""` | The search term to match against `superhero`. |
+
+**Returns:** An array of matching hero objects. Returns an **empty array** (not all heroes) when `name` is blank after trimming.
+
+**Edge cases:**
+- Empty string or whitespace-only input → returns `[]`. This prevents the search page from flooding the results area before the user has typed anything.
+- The comparison uses `toLocaleLowerCase()` on both sides, so `"spider"`, `"Spider"`, and `"SPIDER"` all match `"Spider-Man"`.
+- No results for a valid but non-matching query → returns `[]`.
+
+---
+
+### `getHeroesByPublisher(publisher)`
+
+Returns all heroes for a given publisher. Used by `MarvelPage` and `DcPage`.
+
+```js
+// src/Heroes/helpers/getHeroesByPublisher.js
+export const getHeroesByPublisher = (publisher) => {
+  const validPublishers = ["DC Comics", "Marvel Comics"];
+  if (!validPublishers.includes(publisher)) {
+    throw new Error(`${publisher} is not a valid publisher`);
+  }
+  return heroes.filter(heroe => heroe.publisher === publisher);
+};
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `publisher` | `string` | Must be exactly `"DC Comics"` or `"Marvel Comics"`. |
+
+**Returns:** An array of all hero objects whose `publisher` matches the argument.
+
+**Edge case:** Passing any string other than the two valid publishers throws an `Error`. This is a deliberate fail-fast guard — if a new page tries to filter by a misspelled publisher name, the error surfaces immediately in development rather than silently returning an empty list.
+
+<CodeGroup>
+```js DC Comics page
+import { getHeroesByPublisher } from "../helpers/getHeroesByPublisher";
+
+const dcHeroes = getHeroesByPublisher("DC Comics");
+// → array of 10 DC heroes
+```
+
+```js Marvel page
+import { getHeroesByPublisher } from "../helpers/getHeroesByPublisher";
+
+const marvelHeroes = getHeroesByPublisher("Marvel Comics");
+// → array of 10 Marvel heroes
+```
+
+```js Invalid publisher (throws)
+getHeroesByPublisher("Image Comics");
+// → Error: Image Comics is not a valid publisher
+```
+</CodeGroup>
+
+---
+
+## Complete Hero Catalogue
+
+The dataset contains exactly 20 heroes — 10 from DC Comics and 10 from Marvel Comics.
+
+| id | Superhero | Publisher |
+|---|---|---|
+| `dc-batman` | Batman | DC Comics |
+| `dc-superman` | Superman | DC Comics |
+| `dc-flash` | Flash | DC Comics |
+| `dc-green` | Green Lantern | DC Comics |
+| `dc-arrow` | Green Arrow | DC Comics |
+| `dc-wonder` | Wonder Woman | DC Comics |
+| `dc-martian` | Martian Manhunter | DC Comics |
+| `dc-robin` | Robin/Nightwing | DC Comics |
+| `dc-blue` | Blue Beetle | DC Comics |
+| `dc-black` | Black Canary | DC Comics |
+| `marvel-captain` | Captain America | Marvel Comics |
+| `marvel-cyclops` | Cyclops | Marvel Comics |
+| `marvel-daredevil` | Daredevil | Marvel Comics |
+| `marvel-hawkeye` | Hawkeye | Marvel Comics |
+| `marvel-hulk` | Hulk | Marvel Comics |
+| `marvel-iron` | Iron Man | Marvel Comics |
+| `marvel-silver` | Silver Surfer | Marvel Comics |
+| `marvel-spider` | Spider-Man | Marvel Comics |
+| `marvel-thor` | Thor | Marvel Comics |
+| `marvel-wolverine` | Wolverine | Marvel Comics |
+
+<Note>
+  The Marvel heroes share the same six-field shape as DC heroes. Their ids, images, and data entries follow the exact same conventions described above. Adding a 21st hero means appending one object to the `heroes` array and placing the corresponding `{id}.jpg` in `public/heroes/`.
+</Note>

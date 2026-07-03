@@ -1,0 +1,239 @@
+---
+title: "Testing Overview: Stack, Structure & Patterns"
+sidebarTitle: "Overview"
+description: "A complete guide to the Heroes App test suite: tooling, directory layout, test file responsibilities, and the key patterns used across all tests."
+---
+
+Heroes App uses a carefully assembled testing stack built on **Jest 29** and **React Testing Library 16** to cover reducers, routing logic, protected routes, and UI components. All test files live under a `tests/` directory that mirrors the `src/` folder structure, making it easy to locate tests for any module. The sections below explain every layer of the setup — from the packages that power the suite to the recurring patterns you'll see throughout the codebase.
+
+## Testing Stack
+
+<CardGroup cols={2}>
+  <Card title="Jest 29" icon="flask">
+    The test runner and assertion framework. Configured via `jest.config.cjs` to use the `jsdom` environment so DOM APIs are available in every test.
+  </Card>
+  <Card title="React Testing Library 16" icon="react">
+    Renders components into the virtual DOM and exposes semantic queries (`getByRole`, `getByText`, `getByLabelText`) that reflect real user interactions.
+  </Card>
+  <Card title="@testing-library/jest-dom" icon="circle-check">
+    Extends Jest's `expect` with DOM-specific matchers such as `toBeInTheDocument`, `toHaveStyle`, and `toHaveValue`.
+  </Card>
+  <Card title="babel-jest + Babel presets" icon="code">
+    `babel-jest` transpiles JSX and ES Modules for Jest. `@babel/preset-env` targets `esmodules: true` and `@babel/preset-react` is set to the `automatic` runtime.
+  </Card>
+  <Card title="jest-environment-jsdom" icon="browser">
+    Provides a simulated browser environment (DOM, `localStorage`, `window`) so components that interact with browser APIs can be tested without a real browser.
+  </Card>
+  <Card title="identity-obj-proxy" icon="palette">
+    Intercepts CSS Module imports and returns the class name string as-is, preventing import errors when components import `.module.css` files.
+  </Card>
+</CardGroup>
+
+### Configuration files
+
+<CodeGroup>
+```js jest.config.cjs
+module.exports = {
+  testEnvironment: "jest-environment-jsdom",
+};
+```
+
+```js babel.config.cjs
+module.exports = {
+  presets: [
+    ["@babel/preset-env", { targets: { esmodules: true } }],
+    ["@babel/preset-react", { runtime: "automatic" }],
+  ],
+};
+```
+</CodeGroup>
+
+<Note>
+  `identity-obj-proxy` is typically wired in `jest.config.cjs` under `moduleNameMapper` to intercept `*.module.css` imports. If you add new CSS Modules to the project, ensure the mapper pattern covers them.
+</Note>
+
+---
+
+## Directory Structure
+
+The `tests/` tree mirrors `src/` so every test file sits at the same relative depth as the module it covers.
+
+```
+tests/
+├── Heroes/
+│   └── pages/
+│       ├── SearchPage.test.jsx
+│       └── __snapshots__/
+│           └── SearchPage.test.jsx.snap
+├── auth/
+│   ├── context/
+│   │   └── authReducer.test.js
+│   └── types/
+│       └── types.test.js
+├── router/
+│   ├── AppRouter.test.jsx
+│   ├── PrivateRoute.test.jsx
+│   └── PublicRoute.test.jsx
+└── ui/
+    └── components/
+        └── Navbar.test.jsx
+```
+
+---
+
+## Test File Responsibilities
+
+<Accordion title="tests/auth/context/authReducer.test.js">
+  Tests the `authReducer` pure function in isolation. Verifies that:
+  - Dispatching an unknown action returns the current state unchanged.
+  - A `types.login` action sets `logged: true` and attaches the user payload.
+  - A `types.logout` action resets the state to `{ logged: false }`, removing the user.
+
+  Because `authReducer` is a plain function with no side effects, no DOM or router setup is needed — the tests are purely input/output assertions.
+
+  ```js
+  describe("Pruebas en el <authReducer/>", () => {
+    test("debe retornar el estado por defecto", () => {
+      const state = authReducer({ logged: false }, {});
+      expect(state).toEqual({ logged: false });
+    });
+
+    test("debe de (login) llamar el login autenticar y establecer el user", () => {
+      const action = {
+        type: types.login,
+        payload: { name: "luis fernandez", id: 123 },
+      };
+      const state = authReducer({ logged: false }, action);
+      expect(state).toEqual({ logged: true, user: action.payload });
+    });
+  });
+  ```
+</Accordion>
+
+<Accordion title="tests/auth/types/types.test.js">
+  A simple equality check that guards against accidental string changes in the action-type constants. It asserts that `types` exports exactly `{ login: "[Auth] Login", logout: "[Auth] Logout" }`. Any rename will immediately fail this test and signal that dependent reducers and dispatches need to be updated.
+</Accordion>
+
+<Accordion title="tests/router/AppRouter.test.jsx">
+  Tests the top-level `AppRouter` component by wrapping it in both `MemoryRouter` and a mocked `AuthContext.Provider`. Two scenarios are covered:
+  - **Unauthenticated** (`logged: false`): navigating to `/marvel` renders the Login page instead.
+  - **Authenticated** (`logged: true`): navigating to `/login` redirects to the Marvel listing.
+
+  ```jsx
+  test("debe de mostrar el login si no esta autenticado", () => {
+    const contextValue = { logged: false };
+    render(
+      <MemoryRouter initialEntries={["/marvel"]}>
+        <AuthContext.Provider value={contextValue}>
+          <AppRouter />
+        </AuthContext.Provider>
+      </MemoryRouter>
+    );
+    expect(screen.getAllByText("Login").length).toBe(2);
+  });
+  ```
+</Accordion>
+
+<Accordion title="tests/router/PrivateRoute.test.jsx">
+  Renders `PrivateRoute` with an authenticated context and confirms that its `children` are displayed. Also spies on `localStorage.setItem` to verify that `PrivateRoute` persists the current path as `"lastPath"` — enabling post-login redirect to the last visited URL.
+</Accordion>
+
+<Accordion title="tests/router/PublicRoute.test.jsx">
+  Two scenarios mirror `PrivateRoute`:
+  - **Unauthenticated**: `children` are rendered normally.
+  - **Authenticated**: the component redirects away from `/login` to `/marvel`, so the public child is never shown.
+</Accordion>
+
+<Accordion title="tests/Heroes/pages/SearchPage.test.jsx">
+  The most comprehensive test file, covering four scenarios for `SearchPage`:
+  1. **Snapshot**: default render with no query string matches the stored snapshot.
+  2. **Query string hydration**: `?q=batman` pre-fills the text input and displays Batman's card.
+  3. **No match**: `?q=batman123` shows the error alert (`display: ""`).
+  4. **Form submission**: typing a new value and submitting calls `navigate("?q=superman")`.
+
+  `useNavigate` is mocked at the module level to prevent real navigation during tests.
+</Accordion>
+
+<Accordion title="tests/ui/components/Navbar.test.jsx">
+  Renders `Navbar` inside `MemoryRouter` with a mocked `AuthContext` that includes a logged-in user named `"Fernando"`. Verifies:
+  - The user's name appears in the navbar.
+  - Clicking the logout button calls `context.logout()` **and** `navigate("/login", { replace: true })`.
+
+  `useNavigate` is mocked at the module level so `navigate` calls can be tracked with `jest.fn()`.
+</Accordion>
+
+---
+
+## Testing Patterns
+
+The project relies on five recurring patterns. Understanding them makes it straightforward to add new tests that are consistent with the existing suite.
+
+### 1 — MemoryRouter with `initialEntries`
+
+Any component that uses React Router hooks or renders `<Link>` / `<Navigate>` must be wrapped in a router. `MemoryRouter` is used instead of `BrowserRouter` because it accepts an `initialEntries` array to simulate a specific URL without touching the browser's address bar.
+
+```jsx
+render(
+  <MemoryRouter initialEntries={["/search?q=batman"]}>
+    <SearchPage />
+  </MemoryRouter>
+);
+```
+
+### 2 — Mocking `AuthContext` via `AuthContext.Provider`
+
+Components that consume `useContext(AuthContext)` receive the context value from the nearest `<AuthContext.Provider>`. Tests inject a plain object as the value, controlling exactly which shape of auth state the component sees.
+
+```jsx
+const contextValue = { logged: true, user: { id: "ABC", name: "Juanito" } };
+
+render(
+  <MemoryRouter initialEntries={["/login"]}>
+    <AuthContext.Provider value={contextValue}>
+      <AppRouter />
+    </AuthContext.Provider>
+  </MemoryRouter>
+);
+```
+
+### 3 — Mocking `useNavigate`
+
+`useNavigate` returns a function that imperatively pushes to the history stack. In tests, this side effect is replaced with a `jest.fn()` at the module level so navigation calls can be asserted without actually changing routes.
+
+```js
+const mockedUseNavigate = jest.fn();
+
+jest.mock("react-router-dom", () => ({
+  ...jest.requireActual("react-router-dom"),
+  useNavigate: () => mockedUseNavigate,
+}));
+```
+
+### 4 — Snapshot Testing
+
+`SearchPage` includes a snapshot test that serialises the rendered DOM on first run and saves it to `__snapshots__/SearchPage.test.jsx.snap`. Subsequent runs diff against that snapshot, catching unintentional UI regressions.
+
+```jsx
+test("debe de mostrar correctamente con valores por defecto", () => {
+  const { container } = render(
+    <MemoryRouter>
+      <SearchPage />
+    </MemoryRouter>
+  );
+  expect(container).toMatchSnapshot();
+});
+```
+
+<Tip>
+  Run `npx jest --updateSnapshot` (or press `u` in watch mode) to regenerate snapshots after intentional UI changes.
+</Tip>
+
+### 5 — Pure Reducer Testing
+
+`authReducer` is a plain JavaScript function, so its tests require no DOM setup — just import, call, and assert. This pattern is the fastest and most reliable kind of test because there are no asynchronous operations, no rendering, and no mocks.
+
+```js
+const action = { type: types.login, payload: { name: "luis fernandez", id: 123 } };
+const state = authReducer({ logged: false }, action);
+expect(state).toEqual({ logged: true, user: action.payload });
+```

@@ -1,0 +1,285 @@
+---
+title: "Authentication System in Heroes App Explained"
+sidebarTitle: "Authentication"
+description: "Learn how Heroes App handles auth using React Context, useReducer, and localStorage — no backend required, with full route protection."
+---
+
+Heroes App implements a fully client-side authentication system built on React's `useReducer` hook, the Context API, and `localStorage`. There is no backend or JWT involved — a user "logs in" by storing a simple user object in the browser, and every protected page checks that object before rendering. This page walks through every piece of the system, from the reducer and provider down to the route guards and post-login redirect logic.
+
+## How Authentication Works
+
+The system has three moving parts that work together:
+
+<Steps>
+  <Step title="State lives in useReducer">
+    `AuthProvider` creates an `authState` object via `useReducer`. The reducer handles two action types — `login` and `logout` — and produces a new state each time one is dispatched.
+  </Step>
+  <Step title="Persistence lives in localStorage">
+    On login, the user object is written to `localStorage`. On logout it is removed. A lazy initializer (`init`) reads from `localStorage` when the app first mounts, so a page refresh never logs the user out.
+  </Step>
+  <Step title="Context broadcasts state to the tree">
+    `AuthContext.Provider` exposes `logged`, `user`, `login`, and `logout` to every child component. Route guards and pages consume this context with `useContext(AuthContext)`.
+  </Step>
+</Steps>
+
+---
+
+## Auth State Shape
+
+Every component that reads from `AuthContext` receives an object with this shape:
+
+```ts
+interface AuthState {
+  logged: boolean;                          // true while a session is active
+  user: { id: string; name: string } | null; // null when logged out
+}
+```
+
+<Note>
+  `user` is `null` after a logout action because the reducer returns `{ logged: false }` with no `user` key, not because it is explicitly set to `null`. Consuming components should always guard with `logged` before accessing `user`.
+</Note>
+
+---
+
+## Action Types
+
+Action type strings are centralised in a single constants file to avoid typo-prone hard-coded strings scattered across the codebase.
+
+```js
+// src/auth/types/types.js
+export const types = {
+  login: "[Auth] Login",
+  logout: "[Auth] Logout",
+};
+```
+
+---
+
+## The Reducer
+
+`authReducer` is a pure function — given the same state and action it always produces the same next state.
+
+```js
+// src/auth/context/authReducer.js
+import { types } from "../types/types";
+
+export const authReducer = (state = {}, action) => {
+  switch (action.type) {
+    case types.login:
+      return { ...state, logged: true, user: action.payload };
+    case types.logout:
+      return { logged: false };
+    default:
+      return state;
+  }
+};
+```
+
+| Action type | Payload | Next state |
+|---|---|---|
+| `[Auth] Login` | `{ id, name }` | `{ logged: true, user: { id, name } }` |
+| `[Auth] Logout` | *(none)* | `{ logged: false }` |
+
+<Tip>
+  The logout case intentionally omits `user` from the returned object. This removes the previous user data entirely rather than setting it to `null`, which is a clean way to avoid accidentally reading stale data.
+</Tip>
+
+---
+
+## The AuthProvider
+
+`AuthProvider` is the component that wires everything together. It owns the reducer, exposes helper functions, and renders the context provider around the rest of the application.
+
+```jsx
+// src/auth/context/AuthProvider.jsx
+const init = () => {
+  const user = JSON.parse(localStorage.getItem("user"));
+  return { logged: !!user, user: user };
+};
+
+export const AuthProvider = ({ children }) => {
+  const [authState, dispatch] = useReducer(authReducer, {}, init);
+
+  const login = (name = "") => {
+    const user = { id: "123", name };
+    const action = { type: types.login, payload: user };
+    localStorage.setItem("user", JSON.stringify(user));
+    dispatch(action);
+  };
+
+  const logout = () => {
+    localStorage.removeItem("user");
+    const action = { type: types.logout };
+    dispatch(action);
+  };
+
+  return (
+    <AuthContext.Provider value={{ ...authState, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+```
+
+### The `init` lazy initializer
+
+`useReducer` accepts a third argument — an initializer function. `init` runs exactly once when the provider mounts and builds the initial state from whatever is already in `localStorage`:
+
+```js
+const init = () => {
+  const user = JSON.parse(localStorage.getItem("user"));
+  return { logged: !!user, user: user };
+};
+```
+
+If `localStorage` contains a serialised user object, `!!user` evaluates to `true` and the app boots in a logged-in state. If the key is absent, `JSON.parse` returns `null`, so `logged` becomes `false`.
+
+### `login(name)`
+
+<Accordion title="Step-by-step: what login() does">
+  1. Constructs a user object: `{ id: "123", name }`.
+  2. Serialises it to `localStorage` under the key `"user"`.
+  3. Dispatches a `types.login` action with the user as payload.
+  4. The reducer spreads the new user into state and sets `logged: true`.
+</Accordion>
+
+### `logout()`
+
+<Accordion title="Step-by-step: what logout() does">
+  1. Removes the `"user"` key from `localStorage`.
+  2. Dispatches a `types.logout` action with no payload.
+  3. The reducer replaces the entire state with `{ logged: false }`.
+</Accordion>
+
+### Context value
+
+The value exposed to consumers is a flat object that merges state fields with the two action helpers:
+
+```js
+{ logged, user, login, logout }
+```
+
+---
+
+## Route Protection
+
+Two thin wrapper components gate access to routes based on `logged`.
+
+### PrivateRoute
+
+Renders its `children` only when the user is logged in. If not, it saves the current path to `localStorage` and redirects to `/login`.
+
+```jsx
+// src/router/PrivateRoute.jsx
+export const PrivateRoute = ({ children }) => {
+  const { logged } = useContext(AuthContext);
+  const { pathname, search } = useLocation();
+
+  const lastPath = pathname + search;
+  localStorage.setItem("lastPath", lastPath);
+
+  return logged ? children : <Navigate to="/login" />;
+};
+```
+
+<Note>
+  `PrivateRoute` writes `lastPath` on every render, not only when redirecting. This means it always tracks the most recent private URL the user attempted to visit, even if they were already logged in when they navigated there.
+</Note>
+
+### PublicRoute
+
+Renders its `children` only when the user is **not** logged in. An already-authenticated user who somehow lands on `/login` is immediately sent to `/marvel`.
+
+```jsx
+// src/router/PublicRoute.jsx
+export const PublicRoute = ({ children }) => {
+  const { logged } = useContext(AuthContext);
+  return !logged ? children : <Navigate to="/marvel" />;
+};
+```
+
+---
+
+## The `lastPath` Redirect Flow
+
+One of the most important UX details is that after logging in, the user lands on the page they were trying to reach — not just the app root.
+
+<Steps>
+  <Step title="User visits a protected route while logged out">
+    `PrivateRoute` fires. It reads `pathname + search` from `useLocation()`, writes it to `localStorage` as `"lastPath"`, and redirects to `/login`.
+  </Step>
+  <Step title="User clicks Login on LoginPage">
+    `LoginPage` reads `localStorage.getItem("lastPath")`, falls back to `"/"` if missing, calls `login()`, then navigates to that path with `replace: true`.
+  </Step>
+  <Step title="User arrives at the intended page">
+    Because `navigate` used `replace: true`, the login page is not in the browser history — pressing the back button will not loop back to the login screen.
+  </Step>
+</Steps>
+
+```jsx
+// src/auth/pages/LoginPage.jsx
+export const LoginPage = () => {
+  const { login } = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  const onLogin = () => {
+    const lastPath = localStorage.getItem("lastPath") || "/";
+    login("Luis Fernandez");
+    navigate(lastPath, { replace: true });
+  };
+
+  return (
+    <div className="d-flex justify-content-center align-items-center vh-100">
+      <div className="card shadow-lg p-4 rounded" style={{ width: "22rem" }}>
+        <h1 className="text-center mb-3">LoginPage</h1>
+        <hr />
+        <button className="btn btn-primary btn-lg w-100" onClick={onLogin}>
+          Login
+        </button>
+      </div>
+    </div>
+  );
+};
+```
+
+---
+
+## Using AuthContext in a Component
+
+Any component inside `AuthProvider` can subscribe to auth state by calling `useContext(AuthContext)`.
+
+<CodeGroup>
+```jsx Reading auth state
+import { useContext } from "react";
+import { AuthContext } from "../auth/context/AuthContext";
+
+export const UserBadge = () => {
+  const { logged, user } = useContext(AuthContext);
+
+  if (!logged) return null;
+  return <span>Hello, {user.name}</span>;
+};
+```
+
+```jsx Calling logout
+import { useContext } from "react";
+import { AuthContext } from "../auth/context/AuthContext";
+import { useNavigate } from "react-router-dom";
+
+export const LogoutButton = () => {
+  const { logout } = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
+  return <button onClick={handleLogout}>Sign out</button>;
+};
+```
+</CodeGroup>
+
+<Tip>
+  You never need to import the reducer or action types directly in a component — all the dispatch logic is encapsulated inside `login()` and `logout()`. Just consume the context and call those helpers.
+</Tip>

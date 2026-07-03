@@ -1,0 +1,74 @@
+---
+title: "Heroes App: Marvel & DC Hero Browser Overview"
+sidebarTitle: "Introduction"
+description: "Heroes App is a React 19 + Vite SPA for browsing Marvel and DC Comics heroes, featuring protected routes, real-time search, and a clean Bootstrap UI."
+---
+
+Heroes App is a single-page application built with React 19 and Vite that lets you explore a curated catalog of 20 superheroes from Marvel and DC Comics. The app demonstrates modern React patterns — context-based authentication, protected routing, real-time search with URL-synced query strings, and a component-driven UI — all without a backend or external API, making it an ideal reference project for learning production-ready React architecture.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Hero Catalog" icon="book-open">
+    Browse 10 Marvel and 10 DC Comics heroes, each with an image, alter ego, and first appearance info. Heroes are organized by publisher on dedicated pages.
+  </Card>
+  <Card title="Real-Time Search" icon="magnifying-glass">
+    Search across all heroes by name using a live query-string-powered search page. Results update instantly and the search term is persisted in the URL via `?q=`.
+  </Card>
+  <Card title="Auth & Protected Routes" icon="lock">
+    Context-based authentication with `localStorage` persistence. Private routes redirect unauthenticated users to `/login`; public routes redirect logged-in users away from it.
+  </Card>
+  <Card title="Hero Detail Pages" icon="id-card">
+    Each hero has a dedicated detail page at `/hero/:id` showing their full profile and a back-navigation button that respects browser history.
+  </Card>
+  <Card title="Responsive Design" icon="mobile">
+    Built with Bootstrap 5.3 for a fully responsive layout that works across desktop and mobile screen sizes without additional configuration.
+  </Card>
+  <Card title="Fast Dev Experience" icon="bolt">
+    Powered by Vite for near-instant hot module replacement during development, plus a Jest + React Testing Library suite for component and helper unit tests.
+  </Card>
+</CardGroup>
+
+## Tech Stack
+
+The table below summarizes the core technologies and the role each plays in the application.
+
+| Technology | Version | Role |
+|---|---|---|
+| React | ^19.0.0 | UI component library and application core |
+| Vite | latest | Dev server, bundler, and build tool |
+| React Router DOM | v6 | Client-side routing and navigation |
+| Bootstrap | ^5.3.3 | Responsive CSS framework and component styles |
+| query-string | ^6.14.1 | Serializes and parses URL search parameters |
+| Jest | latest | Test runner for unit and integration tests |
+| React Testing Library | latest | Component rendering and DOM assertion utilities |
+| Babel | latest | Transpiles JSX and modern JS for Jest |
+
+## Routing Architecture
+
+Heroes App uses a `HashRouter` so all routes are prefixed with `#/`. This means the app works on any static file host without server-side rewrite rules. The two top-level route guards are `PublicRoute` (accessible only when logged out) and `PrivateRoute` (accessible only when logged in).
+
+| Route | Access | Description |
+|---|---|---|
+| `/#/login` | Public | Login page — one click sets the user session |
+| `/#/marvel` | Private | Marvel Comics hero listing |
+| `/#/dc` | Private | DC Comics hero listing |
+| `/#/search` | Private | Real-time hero search |
+| `/#/hero/:id` | Private | Individual hero detail page |
+
+## What the Docs Cover
+
+These docs walk you through everything from first run to a deep understanding of the codebase.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Clone the repo, install dependencies, and have the app running locally in under five minutes.
+  </Card>
+  <Card title="Project Structure" icon="folder-tree" href="/project-structure">
+    A guided tour of every directory and module in `src/`, including how static assets and tests are organized.
+  </Card>
+</CardGroup>
+
+<Note>
+  Heroes App uses no real backend or authentication server. The login flow stores a hardcoded user object in `localStorage` purely to demonstrate route-guarding patterns. Do not use this auth approach in a production application.
+</Note>

@@ -1,0 +1,282 @@
+---
+title: "Pages Overview — All Route Pages in the Heroes App"
+sidebarTitle: "Pages"
+description: "Reference for all five route-level pages: MarvelPage, DcPage, HeroPage, SearchPage, and LoginPage, including routing, data flow, and UI behaviour."
+---
+
+The Heroes App is composed of five page-level components, each mapped to a specific URL route. Three of them (`MarvelPage`, `DcPage`, and `SearchPage`) are protected routes accessible only after login; `HeroPage` is likewise protected and handles individual hero details; `LoginPage` is the only public route. The sections below document each page's responsibilities, data dependencies, and UI behaviour.
+
+<CardGroup cols={3}>
+  <Card title="MarvelPage" icon="bolt" href="#marvelpage">
+    Route `/marvel` — lists all Marvel Comics heroes in a responsive grid.
+  </Card>
+  <Card title="DcPage" icon="shield" href="#dcpage">
+    Route `/dc` — lists all DC Comics heroes in a responsive grid.
+  </Card>
+  <Card title="HeroPage" icon="user" href="#heropage">
+    Route `/hero/:id` — detailed view of a single hero with back navigation.
+  </Card>
+  <Card title="SearchPage" icon="magnifying-glass" href="#searchpage">
+    Route `/search` — live search by hero name driven by the `?q=` query parameter.
+  </Card>
+  <Card title="LoginPage" icon="lock" href="#loginpage">
+    Route `/login` — public page with a single button that authenticates the user.
+  </Card>
+</CardGroup>
+
+---
+
+## MarvelPage
+
+`MarvelPage` is the default landing page inside the protected area. When a user navigates to `/marvel` they see a centered heading followed by the complete Marvel Comics hero grid. All data loading and rendering is delegated entirely to `HeroList`.
+
+**Route:** `/marvel`
+
+```jsx
+// src/Heroes/pages/MarvelPage.jsx
+import { HeroList } from "../components";
+
+export const MarvelPage = () => (
+  <>
+    <h1 className="text-center mt-5">Marvel Comics</h1>
+    <hr />
+    <HeroList publisher="Marvel Comics" />
+  </>
+);
+```
+
+The root route `/` inside `HeroesRoutes` contains `<Navigate to="/marvel" />`, so unauthenticated users who successfully log in and have no `lastPath` stored will also land here first.
+
+---
+
+## DcPage
+
+`DcPage` mirrors `MarvelPage` exactly but passes `"DC Comics"` to `HeroList`, which filters the hero dataset to DC characters only.
+
+**Route:** `/dc`
+
+```jsx
+// src/Heroes/pages/DcPage.jsx
+import { HeroList } from "../components";
+
+export const DcPage = () => (
+  <>
+    <h1 className="text-center mt-5">Dc Comics</h1>
+    <hr />
+    <HeroList publisher="DC Comics" />
+  </>
+);
+```
+
+<Note>
+  The heading text in the source reads `"Dc Comics"` (lowercase c). This matches the casing in the source file and is intentional.
+</Note>
+
+---
+
+## HeroPage
+
+`HeroPage` renders a full-width detail view for a single hero identified by the `:id` URL segment. It is navigated to automatically when a user clicks any `HeroCard`.
+
+**Route:** `/hero/:id`
+
+### Data flow
+
+<Steps>
+  <Step title="Read the route parameter">
+    `useParams()` extracts the `:id` segment from the current URL (e.g. `"dc-batman"` from `/hero/dc-batman`).
+  </Step>
+  <Step title="Look up the hero">
+    `getHeroById(id)` searches `src/Heroes/data/heroes.js` for an entry whose `id` matches. The call is wrapped in `useMemo` with `[id]` as the dependency so it only re-runs when the route parameter changes.
+
+    ```js
+    // src/Heroes/helpers/getHeroById.js
+    export const getHeroById = (id) =>
+      heroes.find((hero) => hero.id === id);
+    ```
+  </Step>
+  <Step title="Guard against unknown IDs">
+    If `getHeroById` returns `undefined` (the ID does not exist in the dataset), the component immediately renders `<Navigate to="/marvel" />`, redirecting the user back to the Marvel listing without displaying any broken UI.
+  </Step>
+  <Step title="Render hero details">
+    When a valid hero is found, the page renders a two-column Bootstrap layout: the hero's photo on the left and a detail list on the right.
+  </Step>
+</Steps>
+
+### Layout
+
+```jsx
+// src/Heroes/pages/HeroPage.jsx
+export const HeroPage = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const hero = useMemo(() => getHeroById(id), [id]);
+
+  const onNavigateBack = () => navigate(-1);
+
+  if (!hero) return <Navigate to="/marvel" />;
+
+  return (
+    <div className="row mt-5 d-flex align-items-center">
+      {/* Left column — hero image */}
+      <div className="col-md-4 text-center">
+        <img
+          src={`/heroes/${id}.jpg`}
+          alt={hero.superhero}
+          className="img-thumbnail animate__animated animate__fadeInLeft shadow-lg rounded"
+        />
+      </div>
+
+      {/* Right column — hero details */}
+      <div className="col-md-8">
+        <h3 className="text-primary">{hero.superhero}</h3>
+        <ul className="list-group list-group-flush border rounded shadow-sm">
+          <li className="list-group-item"><b>Alter ego: </b>{hero.alter_ego}</li>
+          <li className="list-group-item"><b>Publisher: </b>{hero.publisher}</li>
+          <li className="list-group-item"><b>First appearance: </b>{hero.first_appearance}</li>
+        </ul>
+        <h5 className="mt-3 text-secondary">Characters</h5>
+        <p className="fst-italic">{hero.characters}</p>
+        <button className="btn btn-primary px-4 mt-3 shadow-sm" onClick={onNavigateBack}>
+          Regresar
+        </button>
+      </div>
+    </div>
+  );
+};
+```
+
+### Image animation
+
+The hero image receives `animate__animated animate__fadeInLeft` from Animate.css. This slides the image in from the left side on every route visit, providing a polished page-transition feel.
+
+### Back navigation
+
+The **Regresar** button calls `navigate(-1)`, which moves back one entry in the browser history stack — equivalent to pressing the browser's Back button. This means the destination is always wherever the user came from (typically the Marvel or DC listing, or the search results page).
+
+<Tip>
+  Because `navigate(-1)` is history-based, avoid linking directly to a `/hero/:id` URL from an external source. If the user has no history to go back to, the button will have no effect. In those cases they can use the Navbar links to continue navigating.
+</Tip>
+
+---
+
+## SearchPage
+
+`SearchPage` provides a full-text search experience driven entirely by the URL query string. The search term is stored in `?q=`, making searches shareable and bookmarkable.
+
+**Route:** `/search`
+
+### URL-driven search state
+
+Rather than storing the search term in `useState`, `SearchPage` reads it from the URL:
+
+```jsx
+const location = useLocation();
+const { q = "" } = queryString.parse(location.search);
+```
+
+`queryString.parse` (from the `query-string` package) converts `location.search` (e.g. `"?q=flash"`) into a plain object `{ q: "flash" }`. The default `""` ensures `q` is always a string even when the query parameter is absent.
+
+### Search results
+
+```js
+const heroes = getHeroesByName(q);
+```
+
+```js
+// src/Heroes/helpers/getHeroesByName.js
+export const getHeroesByName = (name = "") => {
+  name = name.toLocaleLowerCase().trim();
+  if (name.length === 0) return [];
+  return heroes.filter((hero) =>
+    hero.superhero.toLocaleLowerCase().includes(name)
+  );
+};
+```
+
+The helper is case-insensitive and matches any substring of the `superhero` field. An empty `q` always returns an empty array.
+
+### UI states
+
+The page has three distinct display states controlled by two boolean flags:
+
+| Flag | Condition | UI shown |
+|---|---|---|
+| `showSearch` | `q.length === 0` | Blue info alert: *"🧐 Search a hero to see results!"* |
+| `showError` | `q.length > 0 && heroes.length === 0` | Red error alert: *"❌ No hero found with **{q}**"* |
+| Results grid | `heroes.length > 0` | A `row-cols-1 row-cols-md-2` grid of `HeroCard` components |
+
+### Form submission
+
+The search form is controlled via the custom `useForm` hook, initialised with `{ searchText: q }` so the input always reflects the current URL query:
+
+```jsx
+const { searchText, onInputChange } = useForm({ searchText: q });
+
+const onSearchSubmit = (event) => {
+  event.preventDefault();
+  navigate(`?q=${searchText}`);
+};
+```
+
+Submitting the form pushes a new history entry with the updated `?q=` parameter. React Router re-renders the component, `queryString.parse` reads the new value, and `getHeroesByName` returns fresh results — all without a page reload.
+
+<Note>
+  Navigating to `?q=` (with an empty value) or arriving at `/search` with no query string both result in `showSearch = true` and an empty results grid, prompting the user to type something.
+</Note>
+
+---
+
+## LoginPage
+
+`LoginPage` is the sole public page in the app. It renders a centred card with a single **Login** button. There is no username or password field — authentication is simulated for demonstration purposes.
+
+**Route:** `/login`
+
+### Login flow
+
+<Steps>
+  <Step title="User clicks Login">
+    The `onLogin` handler fires. It reads `lastPath` from `localStorage` — the path the user was trying to reach before being redirected to login (set by `PrivateRoute`). If no value is stored, it defaults to `"/"`.
+  </Step>
+  <Step title="Authenticate the user">
+    `login("Luis Fernandez")` is called. Inside `AuthProvider`, this creates a user object `{ id: "123", name: "Luis Fernandez" }`, persists it to `localStorage` under the key `"user"`, and dispatches `types.login` to the reducer, setting `logged: true`.
+  </Step>
+  <Step title="Redirect to lastPath">
+    `navigate(lastPath, { replace: true })` sends the user to the route they originally intended to visit. Using `replace: true` removes the `/login` entry from the history stack so the Back button does not return them to the login screen.
+  </Step>
+</Steps>
+
+```jsx
+// src/auth/pages/LoginPage.jsx
+import { useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../context/AuthContext";
+
+export const LoginPage = () => {
+  const { login } = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  const onLogin = () => {
+    const lastPath = localStorage.getItem("lastPath") || "/";
+    login("Luis Fernandez");
+    navigate(lastPath, { replace: true });
+  };
+
+  return (
+    <div className="d-flex justify-content-center align-items-center vh-100">
+      <div className="card shadow-lg p-4 rounded" style={{ width: "22rem" }}>
+        <h1 className="text-center mb-3">LoginPage</h1>
+        <hr />
+        <button className="btn btn-primary btn-lg w-100" onClick={onLogin}>
+          Login
+        </button>
+      </div>
+    </div>
+  );
+};
+```
+
+<Note>
+  The `lastPath` mechanism works in tandem with `PrivateRoute`. When an unauthenticated user tries to visit a protected URL, `PrivateRoute` stores `location.pathname` in `localStorage` as `"lastPath"` before redirecting to `/login`. After a successful login, `LoginPage` retrieves that path and redirects there automatically.
+</Note>

@@ -1,0 +1,311 @@
+---
+title: "Hero Helper Functions: Lookup, Search & Filter"
+sidebarTitle: "Hero Helpers"
+description: "Pure utility functions for querying the static heroes dataset by ID, name substring, or publisher — no API calls, fully synchronous."
+---
+
+Heroes App ships three pure helper functions that cover every way the UI queries hero data: exact lookup by ID, case-insensitive name search, and publisher-based filtering. All three operate on the same static in-memory array exported from `src/Heroes/data/heroes.js`, so they are fully synchronous and require no network calls or async handling.
+
+## Heroes Data Module
+
+The heroes dataset lives at `src/Heroes/data/heroes.js` and exports a single constant array named `heroes`. It contains **20 entries** — 10 DC Comics heroes (IDs prefixed `dc-`) and 10 Marvel Comics heroes (IDs prefixed `marvel-`). The array is a plain JavaScript export; there are no API calls, no lazy loading, and no external dependencies.
+
+Each object in the array has the following shape:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique identifier, e.g. `"dc-batman"` |
+| `superhero` | `string` | Hero's superhero name, e.g. `"Batman"` |
+| `publisher` | `string` | Either `"DC Comics"` or `"Marvel Comics"` |
+| `alter_ego` | `string` | Civilian identity, e.g. `"Bruce Wayne"` |
+| `first_appearance` | `string` | Issue and year of first appearance |
+| `characters` | `string` | Real-world characters portrayed by this hero |
+
+```js
+// Example hero object
+{
+  id: "dc-batman",
+  superhero: "Batman",
+  publisher: "DC Comics",
+  alter_ego: "Bruce Wayne",
+  first_appearance: "Detective Comics #27, 1939",
+  characters: "Adam West, Michael Keaton, Val Kilmer, George Clooney, Christian Bale, Ben Affleck"
+}
+```
+
+## Importing the Helpers
+
+All three helpers are re-exported from a single barrel file at `src/Heroes/helpers/index.js`, so you can import any combination in one statement:
+
+```js
+import {
+  getHeroById,
+  getHeroesByName,
+  getHeroesByPublisher,
+} from './helpers';
+```
+
+<Note>
+  The `index.js` barrel re-exports `getHeroById`, `getHeroesByName`, and `getHeroesByPublisher`. You never need to import from the individual files directly.
+</Note>
+
+---
+
+## `getHeroById`
+
+`getHeroById` performs an exact match on the `id` field of every hero in the dataset and returns the first (and only) match. It is used in `HeroPage` wrapped in a `useMemo` to avoid re-computing on every render.
+
+### Signature
+
+```js
+// src/Heroes/helpers/getHeroById.js
+import { heroes } from "../data/heroes";
+
+export const getHeroById = (id) => {
+  return heroes.find(hero => hero.id === id);
+};
+```
+
+### Parameters
+
+<ParamField path="id" type="string" required>
+  The unique hero identifier to look up. IDs follow the pattern `"<publisher-prefix>-<heroname>"`, for example `"dc-batman"` or `"marvel-spiderman"`. The match is case-sensitive and must be exact.
+</ParamField>
+
+### Return Value
+
+<ResponseField name="hero" type="Hero | undefined">
+  The Hero object whose `id` exactly matches the argument, or `undefined` if no hero is found. Because IDs are unique in the dataset, this function will never return more than one result.
+</ResponseField>
+
+### Edge Cases
+
+- Returns `undefined` for any ID not present in the dataset — always guard the return value before accessing its properties.
+- The match is **exact and case-sensitive**: `"DC-Batman"` will not match `"dc-batman"`.
+
+### Example
+
+```jsx
+// src/Heroes/pages/HeroPage.jsx
+import { useParams, Navigate } from 'react-router-dom';
+import { useMemo } from 'react';
+import { getHeroById } from '../helpers';
+
+export const HeroPage = () => {
+  const { id } = useParams();  // e.g. "dc-batman"
+
+  const hero = useMemo(() => getHeroById(id), [id]);
+
+  // Guard: redirect if the ID doesn't exist in the dataset
+  if (!hero) return <Navigate to="/marvel" />;
+
+  return (
+    <div>
+      <h1>{hero.superhero}</h1>
+      <p>Alter ego: {hero.alter_ego}</p>
+      <p>First appearance: {hero.first_appearance}</p>
+    </div>
+  );
+};
+```
+
+<Tip>
+  Wrap `getHeroById` in `useMemo` (as `HeroPage` does) so the lookup only runs when the `id` param changes, not on every render triggered by unrelated state updates.
+</Tip>
+
+---
+
+## `getHeroesByName`
+
+`getHeroesByName` performs a **case-insensitive, partial-string match** against each hero's `superhero` field. It is used in `SearchPage` to filter the hero list as the user types.
+
+### Signature
+
+```js
+// src/Heroes/helpers/getHeroesByName.js
+import { heroes } from "../data/heroes";
+
+export const getHeroesByName = (name = "") => {
+  name = name.toLocaleLowerCase().trim();
+  if (name.length === 0) return [];
+  return heroes.filter((hero) =>
+    hero.superhero.toLocaleLowerCase().includes(name)
+  );
+};
+```
+
+### Parameters
+
+<ParamField path="name" type="string" default='""'>
+  The search string to match against hero names. Leading and trailing whitespace is trimmed automatically. The comparison is case-insensitive (uses `toLocaleLowerCase()` on both sides), so `"bat"`, `"BAT"`, and `"  Bat  "` all match `"Batman"`.
+</ParamField>
+
+### Return Value
+
+<ResponseField name="heroes" type="Hero[]">
+  An array of Hero objects whose `superhero` name contains `name` as a substring. Returns an **empty array** `[]` when the trimmed input is an empty string — it never returns the full dataset for a blank query.
+</ResponseField>
+
+### Edge Cases
+
+- An empty string (`""`) or a whitespace-only string (`"   "`) returns `[]`, preventing the UI from unintentionally rendering the full hero list.
+- Matching is on the `superhero` field only — searching by `alter_ego` or `characters` is not supported.
+- Returns multiple results when the query matches more than one hero (e.g., `"man"` matches Batman, Superman, Spider-Man, etc.).
+
+### Example
+
+```jsx
+// src/Heroes/pages/SearchPage.jsx
+import { useMemo } from 'react';
+import { useForm } from '../../hooks/useForm';
+import { getHeroesByName } from '../helpers';
+import { HeroCard } from '../components/HeroCard';
+
+export const SearchPage = () => {
+  const { searchText, onInputChange } = useForm({ searchText: '' });
+
+  const filteredHeroes = useMemo(
+    () => getHeroesByName(searchText),
+    [searchText]
+  );
+
+  return (
+    <div>
+      <input
+        type="text"
+        name="searchText"
+        value={searchText}
+        onChange={onInputChange}
+        placeholder="Search by hero name..."
+      />
+
+      {searchText.length > 0 && filteredHeroes.length === 0 && (
+        <p>No heroes found for "{searchText}".</p>
+      )}
+
+      <div className="row">
+        {filteredHeroes.map((hero) => (
+          <HeroCard key={hero.id} {...hero} />
+        ))}
+      </div>
+    </div>
+  );
+};
+```
+
+---
+
+## `getHeroesByPublisher`
+
+`getHeroesByPublisher` returns all heroes belonging to a given publisher. It validates the publisher argument against an allowlist before filtering, throwing a descriptive error for any unrecognised value. It is used in `HeroList` wrapped in `useMemo`.
+
+### Signature
+
+```js
+// src/Heroes/helpers/getHeroesByPublisher.js
+import { heroes } from "../data/heroes";
+
+export const getHeroesByPublisher = (publisher) => {
+  const validPublishers = ["DC Comics", "Marvel Comics"];
+  if (!validPublishers.includes(publisher)) {
+    throw new Error(`${publisher} is not a valid publisher`);
+  }
+  return heroes.filter((heroe) => heroe.publisher === publisher);
+};
+```
+
+### Parameters
+
+<ParamField path="publisher" type="string" required>
+  The publisher to filter by. Must be one of the two accepted values:
+
+  - `"DC Comics"` — returns the 10 DC heroes
+  - `"Marvel Comics"` — returns the 10 Marvel heroes
+
+  The value is matched with strict equality (`===`), so it is **case-sensitive**. Passing `"dc comics"` or `"Marvel"` will throw an error.
+</ParamField>
+
+### Return Value
+
+<ResponseField name="heroes" type="Hero[]">
+  An array of Hero objects whose `publisher` field exactly matches the argument. Returns 10 heroes for each valid publisher. The array is a subset of the original `heroes` array — objects are not copied.
+</ResponseField>
+
+### Errors
+
+<ResponseField name="Error" type="Error">
+  Throws a standard `Error` with the message `"<publisher> is not a valid publisher"` when the `publisher` argument is not in the `["DC Comics", "Marvel Comics"]` allowlist. This makes misconfigured route parameters or typos fail loudly during development.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```jsx HeroList Component
+// src/Heroes/components/HeroList.jsx
+import { useMemo } from 'react';
+import { getHeroesByPublisher } from '../helpers';
+import { HeroCard } from './HeroCard';
+
+export const HeroList = ({ publisher }) => {
+  // publisher is passed as a prop — e.g. "DC Comics" or "Marvel Comics"
+  const heroes = useMemo(
+    () => getHeroesByPublisher(publisher),
+    [publisher]
+  );
+
+  return (
+    <div className="row">
+      {heroes.map((hero) => (
+        <HeroCard key={hero.id} {...hero} />
+      ))}
+    </div>
+  );
+};
+```
+
+```jsx DC Page Usage
+// src/Heroes/pages/DCPage.jsx
+import { HeroList } from '../components/HeroList';
+
+export const DCPage = () => (
+  <div>
+    <h1>DC Comics Heroes</h1>
+    <HeroList publisher="DC Comics" />
+  </div>
+);
+```
+
+```jsx Marvel Page Usage
+// src/Heroes/pages/MarvelPage.jsx
+import { HeroList } from '../components/HeroList';
+
+export const MarvelPage = () => (
+  <div>
+    <h1>Marvel Comics Heroes</h1>
+    <HeroList publisher="Marvel Comics" />
+  </div>
+);
+```
+
+</CodeGroup>
+
+<Note>
+  Always pass one of the two exact strings — `"DC Comics"` or `"Marvel Comics"` — to avoid the thrown `Error`. These strings match the `publisher` values stored in `heroes.js` character-for-character, including capitalisation and the word "Comics".
+</Note>
+
+---
+
+## Quick Reference
+
+<CardGroup cols={3}>
+  <Card title="getHeroById" icon="fingerprint">
+    Exact ID lookup. Returns a single Hero object or `undefined`. Used in `HeroPage` via `useMemo`.
+  </Card>
+  <Card title="getHeroesByName" icon="magnifying-glass">
+    Case-insensitive partial name search. Returns an array (empty for blank input). Used in `SearchPage`.
+  </Card>
+  <Card title="getHeroesByPublisher" icon="filter">
+    Publisher filter with allowlist validation. Throws for invalid publishers. Used in `HeroList`.
+  </Card>
+</CardGroup>

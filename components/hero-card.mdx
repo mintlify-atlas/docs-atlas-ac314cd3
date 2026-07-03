@@ -1,0 +1,213 @@
+---
+title: "HeroCard — Animated Superhero Profile Card Component"
+sidebarTitle: "HeroCard"
+description: "A clickable hero profile card that displays a hero's image, name, alter ego, first appearance, and characters with an animated overlay."
+---
+
+The `HeroCard` component is the primary visual unit for displaying a single superhero. It renders a richly styled card containing the hero's photo, superhero name, alter ego, debut comic issue, and character list. Each card is wrapped in a React Router `Link`, so clicking anywhere on it navigates the user to that hero's dedicated detail page. On mount the card plays a subtle `animate__pulse` animation courtesy of Animate.css, giving the listing page a lively feel without requiring any manual trigger.
+
+## Props
+
+All five props come directly from the hero data object stored in `src/Heroes/data/heroes.js` and are spread onto `HeroCard` by `HeroList`.
+
+<ParamField path="id" type="string" required>
+  The unique hero identifier (e.g. `"dc-batman"`, `"marvel-spider"`). Used to build both the image URL (`/heroes/${id}.jpg`) and the navigation target (`/hero/${id}`).
+</ParamField>
+
+<ParamField path="superhero" type="string" required>
+  The hero's superhero name (e.g. `"Batman"`, `"Spider-Man"`). Rendered in the `.profile-name` overlay and used as the `alt` attribute on the card image.
+</ParamField>
+
+<ParamField path="alter_ego" type="string" required>
+  The hero's civilian identity (e.g. `"Bruce Wayne"`). Displayed below the superhero name in the `.profile-position` overlay.
+</ParamField>
+
+<ParamField path="first_appearance" type="string" required>
+  The comic issue in which the hero first appeared (e.g. `"Detective Comics #27"`). Shown in the bottom gradient overlay inside `.profile-overview`.
+</ParamField>
+
+<ParamField path="characters" type="string" required>
+  A comma-separated list of characters who have held the role (e.g. `"Jay Garrick, Barry Allen, Wally West, Bart Allen"`). Only rendered when it differs from `alter_ego` — see [Conditional characters display](#conditional-characters-display) below.
+</ParamField>
+
+## Image URL convention
+
+The card image is resolved at runtime using the `id` prop:
+
+```jsx
+<img
+  src={`/heroes/${id}.jpg`}
+  className="img img-responsive"
+  alt={superhero}
+/>
+```
+
+All hero images live in the `public/heroes/` directory of the Vite project and are served as static assets. The filename must match the hero's `id` exactly (e.g. `public/heroes/dc-batman.jpg`). Because Vite copies everything in `public/` to the build output root, the path `/heroes/${id}.jpg` resolves correctly in both development and production.
+
+<Note>
+  If an image file is missing for a given hero, the browser will show the broken-image fallback. The `alt` attribute (`superhero`) ensures screen readers still announce the hero's name.
+</Note>
+
+## Conditional characters display
+
+The `characters` field lists every person who has taken on the superhero mantle. When a hero has only one person behind the mask that value is identical to `alter_ego`, so printing it twice would be redundant. `HeroCard` avoids the repetition with a simple inequality check:
+
+```jsx
+{alter_ego !== characters && <p>{characters}</p>}
+```
+
+| Scenario | `alter_ego` | `characters` | Rendered? |
+|---|---|---|---|
+| Single identity | `"Bruce Wayne"` | `"Bruce Wayne"` | ❌ Hidden |
+| Multiple identities | `"Jay Garrick"` | `"Jay Garrick, Barry Allen, Wally West, Bart Allen"` | ✅ Shown |
+
+## Navigation with Link
+
+The entire card surface is wrapped in a React Router `<Link>`:
+
+```jsx
+<Link to={`/hero/${id}`} className="my-card animate__animated animate__pulse">
+  {/* card contents */}
+</Link>
+```
+
+Clicking anywhere on the card — image, name, or overview area — triggers a client-side navigation to `/hero/${id}`, which renders `HeroPage`. No separate click handler is needed.
+
+## Animation behavior
+
+`HeroCard` applies two Animate.css utility classes directly to the `<Link>` element:
+
+| Class | Purpose |
+|---|---|
+| `animate__animated` | Required base class that activates Animate.css transitions |
+| `animate__pulse` | Plays a single, smooth pulse scale on mount |
+
+The pulse fires once when the component mounts (list first renders or the publisher tab changes). It does not repeat unless the component is unmounted and remounted.
+
+## CSS class breakdown
+
+The `.my-card` class in `src/styles.css` creates a layered overlay card using absolute positioning:
+
+<Accordion title="View full .my-card CSS structure">
+
+```css
+/* Container */
+.my-card {
+  min-width: 260px;
+  max-width: 300px;
+  max-height: 70vh;
+  border-radius: 5px;
+  box-shadow: 0px 0px 25px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  position: relative;
+  margin: 10px auto;
+  cursor: pointer;
+  display: inline-block;
+}
+
+/* Hero image — dimmed so text overlays are readable */
+.my-card img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  filter: brightness(70%);
+}
+
+/* Superhero name — top-left absolute */
+.my-card .profile-name {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 25px;
+  font-weight: bold;
+  color: #fff;
+  padding: 15px 20px;
+  transition: all 0.15s linear;
+}
+
+/* Alter ego — below the name, semi-transparent */
+.my-card .profile-position {
+  position: absolute;
+  color: rgba(255, 255, 255, 0.596);
+  left: 30px;
+  top: 60px;
+  transition: all 0.15s linear;
+}
+
+/* Bottom gradient overlay for first_appearance / characters */
+.my-card .profile-overview {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(0deg, rgba(0,0,0,0.4) 50%, rgba(255,255,0,0));
+  color: #fff;
+  padding: 50px 0px 40px 0px;
+  transition: all 0.15s linear;
+}
+
+/* Hover — name and position shift right, overview adjusts bottom padding */
+.my-card:hover .profile-name   { padding-left: 25px; }
+.my-card:hover .profile-position { left: 40px; }
+.my-card:hover .profile-overview { padding-bottom: 25px; }
+.my-card img:hover               { transform: scale(1.01); }
+```
+
+</Accordion>
+
+The visual layers from back to front are:
+
+1. **Hero image** — fills the card, dimmed to 70% brightness
+2. **`.profile-name`** — absolute top-left, always visible
+3. **`.profile-position`** — absolute, just below the name
+4. **`.profile-overview`** — absolute bottom, gradient background, contains `first_appearance` and optionally `characters`
+
+## Usage example
+
+<CodeGroup>
+
+```jsx Single card (direct)
+import { HeroCard } from "./Heroes/components";
+
+export const ExampleCard = () => (
+  <HeroCard
+    id="dc-flash"
+    superhero="Flash"
+    alter_ego="Jay Garrick"
+    first_appearance="Flash Comics #1"
+    characters="Jay Garrick, Barry Allen, Wally West, Bart Allen"
+  />
+);
+```
+
+```jsx Spread from data object
+import { HeroCard } from "./Heroes/components";
+
+const flashHero = {
+  id: "dc-flash",
+  superhero: "Flash",
+  alter_ego: "Jay Garrick",
+  first_appearance: "Flash Comics #1",
+  characters: "Jay Garrick, Barry Allen, Wally West, Bart Allen",
+};
+
+export const ExampleSpread = () => <HeroCard {...flashHero} />;
+```
+
+```jsx Inside a grid (as HeroList does)
+import { HeroCard } from "./Heroes/components";
+
+export const HeroGrid = ({ heroes }) => (
+  <div className="row row-cols-1 row-cols-md-3 g-3">
+    {heroes.map((hero) => (
+      <HeroCard key={hero.id} {...hero} />
+    ))}
+  </div>
+);
+```
+
+</CodeGroup>
+
+<Tip>
+  `HeroCard` must be rendered inside a `<BrowserRouter>` (or equivalent React Router context) because the `<Link>` component requires a router to be present. In tests, wrap the component with `<MemoryRouter>`.
+</Tip>
