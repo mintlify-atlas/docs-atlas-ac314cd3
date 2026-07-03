@@ -25,7 +25,7 @@ Heroes App uses a carefully assembled testing stack built on **Jest 29** and **R
     Provides a simulated browser environment (DOM, `localStorage`, `window`) so components that interact with browser APIs can be tested without a real browser.
   </Card>
   <Card title="identity-obj-proxy" icon="palette">
-    Intercepts CSS Module imports and returns the class name string as-is, preventing import errors when components import `.module.css` files.
+    A project dependency that can intercept CSS Module imports and return class name strings as-is. It is installed but not configured in `jest.config.cjs` in the current setup.
   </Card>
 </CardGroup>
 
@@ -35,6 +35,8 @@ Heroes App uses a carefully assembled testing stack built on **Jest 29** and **R
 ```js jest.config.cjs
 module.exports = {
   testEnvironment: "jest-environment-jsdom",
+  testEnvironment: "jsdom",
+  // setupFiles: ["<rootDir>/jest.setup.js"]
 };
 ```
 
@@ -49,7 +51,7 @@ module.exports = {
 </CodeGroup>
 
 <Note>
-  `identity-obj-proxy` is typically wired in `jest.config.cjs` under `moduleNameMapper` to intercept `*.module.css` imports. If you add new CSS Modules to the project, ensure the mapper pattern covers them.
+  `testEnvironment` is declared twice in `jest.config.cjs`; the second value (`"jsdom"`) is the effective one. `identity-obj-proxy` is listed as a project dependency but is not configured in `jest.config.cjs` — no `moduleNameMapper` key is present in the current config.
 </Note>
 
 ---
@@ -91,6 +93,10 @@ tests/
 
   Because `authReducer` is a plain function with no side effects, no DOM or router setup is needed — the tests are purely input/output assertions.
 
+  <Note>
+    The logout assertions are written **outside** the `describe` block in the actual test file — a quirk of the source. The logout `test()` body is empty; the real assertions run at module scope rather than inside a test case.
+  </Note>
+
   ```js
   describe("Pruebas en el <authReducer/>", () => {
     test("debe retornar el estado por defecto", () => {
@@ -106,7 +112,17 @@ tests/
       const state = authReducer({ logged: false }, action);
       expect(state).toEqual({ logged: true, user: action.payload });
     });
+
+    test("debe de (logout) borrar el name del usuario y logged en false", () => {
+      // body intentionally empty — logout assertions are outside this describe block
+    });
   });
+
+  // logout assertions run outside the describe block (bug in test file)
+  const state = { logged: true, user: { name: "luis fernandez", id: 123 } };
+  const action = { type: types.logout };
+  const newState = authReducer(state, action);
+  expect(newState).toEqual({ logged: false });
   ```
 </Accordion>
 
@@ -145,11 +161,10 @@ tests/
 </Accordion>
 
 <Accordion title="tests/Heroes/pages/SearchPage.test.jsx">
-  The most comprehensive test file, covering four scenarios for `SearchPage`:
+  Covers three scenarios for `SearchPage`:
   1. **Snapshot**: default render with no query string matches the stored snapshot.
-  2. **Query string hydration**: `?q=batman` pre-fills the text input and displays Batman's card.
+  2. **Query string hydration**: `?q=batman` pre-fills the text input and asserts the error alert is hidden (`display: "none"`).
   3. **No match**: `?q=batman123` shows the error alert (`display: ""`).
-  4. **Form submission**: typing a new value and submitting calls `navigate("?q=superman")`.
 
   `useNavigate` is mocked at the module level to prevent real navigation during tests.
 </Accordion>

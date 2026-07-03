@@ -42,7 +42,7 @@ import {
   getHeroById,
   getHeroesByName,
   getHeroesByPublisher,
-} from './helpers';
+} from '../helpers';
 ```
 
 <Note>
@@ -69,7 +69,7 @@ export const getHeroById = (id) => {
 ### Parameters
 
 <ParamField path="id" type="string" required>
-  The unique hero identifier to look up. IDs follow the pattern `"<publisher-prefix>-<heroname>"`, for example `"dc-batman"` or `"marvel-spiderman"`. The match is case-sensitive and must be exact.
+  The unique hero identifier to look up. IDs follow the pattern `"<publisher-prefix>-<heroname>"`, for example `"dc-batman"` or `"marvel-spider"`. The match is case-sensitive and must be exact.
 </ParamField>
 
 ### Return Value

@@ -71,7 +71,7 @@ Heroes_App/
 
 ## Entry Points
 
-**`src/main.jsx`** is the Webpack entry point rendered into `index.html`. It wraps `HeroesApp` in `React.StrictMode` and a `HashRouter`, which means every route in the app is prefixed with `#/` — enabling deployment to any static host without server-side rewrites.
+**`src/main.jsx`** is the Vite entry point rendered into `index.html`. It wraps `HeroesApp` in `React.StrictMode` and a `HashRouter`, which means every route in the app is prefixed with `#/` — enabling deployment to any static host without server-side rewrites.
 
 **`src/HeroesApp.jsx`** is the root React component. It composes `AuthProvider` (which makes auth state available everywhere) around `AppRouter` (which renders the appropriate page based on the current URL).
 
@@ -170,7 +170,7 @@ All 20 hero portrait images live in `public/heroes/` and follow a strict naming 
 public/heroes/<publisher>-<hero-id>.jpg
 ```
 
-Examples: `marvel-spider.jpg`, `dc-batman.jpg`, `marvel-iron.jpg`, `dc-wonderwoman.jpg`.
+Examples: `marvel-spider.jpg`, `dc-batman.jpg`, `marvel-iron.jpg`, `dc-wonder.jpg`.
 
 `HeroCard.jsx` constructs the image `src` path at runtime using the hero's `id` field, so adding a new hero only requires dropping the correctly named image into this folder and adding the hero object to `heroes.js`.
 
@@ -187,13 +187,21 @@ The `tests/` directory mirrors the `src/` folder structure so every source file 
 ```
 tests/
 ├── auth/
+│   ├── context/
+│   │   └── authReducer.test.js
+│   └── types/
+│       └── types.test.js
 ├── Heroes/
-│   ├── components/
-│   ├── helpers/
 │   └── pages/
-├── hooks/
+│       ├── SearchPage.test.jsx
+│       └── __snapshots__/
 ├── router/
+│   ├── AppRouter.test.jsx
+│   ├── PrivateRoute.test.jsx
+│   └── PublicRoute.test.jsx
 └── ui/
+    └── components/
+        └── Navbar.test.jsx
 ```
 
 Configuration files at the project root wire everything together:

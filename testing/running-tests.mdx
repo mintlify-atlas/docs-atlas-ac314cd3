@@ -258,8 +258,16 @@ describe("Pruebas en el <Navbar/>", () => {
   Use `initialEntries` to simulate a specific URL when the component reads from `useSearchParams` or `useLocation`.
 </Accordion>
 
-<Accordion title="CSS imports are handled by identity-obj-proxy">
-  Vite handles CSS Modules at build time, but Jest doesn't run through Vite. Without a mock, `import styles from './Hero.module.css'` throws a syntax error. `identity-obj-proxy` is mapped via `moduleNameMapper` in `jest.config.cjs` to intercept those imports and return an object whose keys match whatever class name is accessed — so `styles.card` returns the string `"card"` and no error is thrown.
+<Accordion title="CSS imports and identity-obj-proxy">
+  Vite handles CSS Modules at build time, but Jest doesn't run through Vite. Without a mock, `import styles from './Hero.module.css'` would throw a syntax error. `identity-obj-proxy` is installed as a project dependency and can be wired up to intercept those imports — but it is **not** currently configured in `jest.config.cjs` (no `moduleNameMapper` key is present). If you add components that import CSS Modules, add the mapper manually:
 
-  You do **not** need to add anything to individual test files for this to work; the proxy operates globally for all tests.
+  ```js
+  // jest.config.cjs — add this to enable identity-obj-proxy
+  module.exports = {
+    testEnvironment: "jsdom",
+    moduleNameMapper: {
+      "\\.(css|module\\.css)$": "identity-obj-proxy",
+    },
+  };
+  ```
 </Accordion>

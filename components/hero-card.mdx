@@ -23,7 +23,7 @@ All five props come directly from the hero data object stored in `src/Heroes/dat
 </ParamField>
 
 <ParamField path="first_appearance" type="string" required>
-  The comic issue in which the hero first appeared (e.g. `"Detective Comics #27"`). Shown in the bottom gradient overlay inside `.profile-overview`.
+  The comic issue in which the hero first appeared (e.g. `"Detective Comics #27"`). Shown in the bottom gradient overlay inside `.profile-overview`, preceded by the Spanish label **"Primera aparición:"**.
 </ParamField>
 
 <ParamField path="characters" type="string" required>
@@ -198,7 +198,7 @@ export const ExampleSpread = () => <HeroCard {...flashHero} />;
 import { HeroCard } from "./Heroes/components";
 
 export const HeroGrid = ({ heroes }) => (
-  <div className="row row-cols-1 row-cols-md-3 g-3">
+  <div className="row rows-cols-1 row-cols-md-3 g-3">
     {heroes.map((hero) => (
       <HeroCard key={hero.id} {...hero} />
     ))}

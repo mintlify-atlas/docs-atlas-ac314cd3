@@ -1,5 +1,5 @@
 ---
-title: "Hero Data Model, Helpers, and Image Assets Guide"
+title: "Hero Data Model, Helper Functions, and Assets Guide"
 sidebarTitle: "Hero Data"
 description: "Understand the Hero object shape, id naming convention, image asset paths, the three helper functions, and the full catalogue of all 20 heroes."
 ---
@@ -15,7 +15,7 @@ Each entry in the `heroes` array is a plain object with six fields:
 | Field | Type | Description |
 |---|---|---|
 | `id` | `string` | Unique identifier following the `{publisher-slug}-{hero-slug}` convention. Used as the URL param and image filename. |
-| `superhero` | `string` | The hero's well-known superhero name (e.g., `"Batman"`, `"Spider-Man"`). |
+| `superhero` | `string` | The hero's well-known superhero name (e.g., `"Batman"`, `"Spider Man"`). |
 | `publisher` | `string` | Either `"DC Comics"` or `"Marvel Comics"`. |
 | `alter_ego` | `string` | The primary civilian identity (e.g., `"Bruce Wayne"`, `"Peter Parker"`). |
 | `first_appearance` | `string` | The comic title and issue number where this hero debuted. |
@@ -66,7 +66,7 @@ Hero ids follow a strict `{publisher-slug}-{hero-slug}` pattern:
 ```
 dc-batman        ← "Batman"         → DC Comics
 dc-wonder        ← "Wonder Woman"   → DC Comics
-marvel-spider    ← "Spider-Man"     → Marvel Comics
+marvel-spider    ← "Spider Man"     → Marvel Comics
 marvel-iron      ← "Iron Man"       → Marvel Comics
 ```
 
@@ -157,7 +157,7 @@ export const getHeroesByName = (name = "") => {
 
 **Edge cases:**
 - Empty string or whitespace-only input → returns `[]`. This prevents the search page from flooding the results area before the user has typed anything.
-- The comparison uses `toLocaleLowerCase()` on both sides, so `"spider"`, `"Spider"`, and `"SPIDER"` all match `"Spider-Man"`.
+- The comparison uses `toLocaleLowerCase()` on both sides, so `"spider"`, `"Spider"`, and `"SPIDER"` all match `"Spider Man"`.
 - No results for a valid but non-matching query → returns `[]`.
 
 ---
@@ -212,28 +212,28 @@ getHeroesByPublisher("Image Comics");
 
 The dataset contains exactly 20 heroes — 10 from DC Comics and 10 from Marvel Comics.
 
-| id | Superhero | Publisher |
-|---|---|---|
-| `dc-batman` | Batman | DC Comics |
-| `dc-superman` | Superman | DC Comics |
-| `dc-flash` | Flash | DC Comics |
-| `dc-green` | Green Lantern | DC Comics |
-| `dc-arrow` | Green Arrow | DC Comics |
-| `dc-wonder` | Wonder Woman | DC Comics |
-| `dc-martian` | Martian Manhunter | DC Comics |
-| `dc-robin` | Robin/Nightwing | DC Comics |
-| `dc-blue` | Blue Beetle | DC Comics |
-| `dc-black` | Black Canary | DC Comics |
-| `marvel-captain` | Captain America | Marvel Comics |
-| `marvel-cyclops` | Cyclops | Marvel Comics |
-| `marvel-daredevil` | Daredevil | Marvel Comics |
-| `marvel-hawkeye` | Hawkeye | Marvel Comics |
-| `marvel-hulk` | Hulk | Marvel Comics |
-| `marvel-iron` | Iron Man | Marvel Comics |
-| `marvel-silver` | Silver Surfer | Marvel Comics |
-| `marvel-spider` | Spider-Man | Marvel Comics |
-| `marvel-thor` | Thor | Marvel Comics |
-| `marvel-wolverine` | Wolverine | Marvel Comics |
+| id | Superhero | Publisher | Alter Ego | First Appearance | Characters |
+|---|---|---|---|---|---|
+| `dc-batman` | Batman | DC Comics | Bruce Wayne | Detective Comics #27 | Bruce Wayne |
+| `dc-superman` | Superman | DC Comics | Kal-El | Action Comics #1 | Kal-El |
+| `dc-flash` | Flash | DC Comics | Jay Garrick | Flash Comics #1 | Jay Garrick, Barry Allen, Wally West, Bart Allen |
+| `dc-green` | Green Lantern | DC Comics | Alan Scott | All-American Comics #16 | Alan Scott, Hal Jordan, Guy Gardner, John Stewart, Kyle Raynor, Jade, Sinestro, Simon Baz |
+| `dc-arrow` | Green Arrow | DC Comics | Oliver Queen | More Fun Comics #73 | Oliver Queen |
+| `dc-wonder` | Wonder Woman | DC Comics | Princess Diana | All Star Comics #8 | Princess Diana |
+| `dc-martian` | Martian Manhunter | DC Comics | J'onn J'onzz | Detective Comics #225 | Martian Manhunter |
+| `dc-robin` | Robin/Nightwing | DC Comics | Dick Grayson | Detective Comics #38 | Dick Grayson |
+| `dc-blue` | Blue Beetle | DC Comics | Dan Garret | Mystery Men Comics #1 | Dan Garret, Ted Kord, Jaime Reyes |
+| `dc-black` | Black Canary | DC Comics | Dinah Drake | Flash Comics #86 | Dinah Drake, Dinah Lance |
+| `marvel-spider` | Spider Man | Marvel Comics | Peter Parker | Amazing Fantasy #15 | Peter Parker |
+| `marvel-captain` | Captain America | Marvel Comics | Steve Rogers | Captain America Comics #1 | Steve Rogers |
+| `marvel-iron` | Iron Man | Marvel Comics | Tony Stark | Tales of Suspense #39 | Tony Stark |
+| `marvel-thor` | Thor | Marvel Comics | Thor Odinson | Journey into Myster #83 | Thor Odinson |
+| `marvel-hulk` | Hulk | Marvel Comics | Bruce Banner | The Incredible Hulk #1 | Bruce Banner |
+| `marvel-wolverine` | Wolverine | Marvel Comics | James Howlett | The Incredible Hulk #180 | James Howlett |
+| `marvel-daredevil` | Daredevil | Marvel Comics | Matthew Michael Murdock | Daredevil #1 | Matthew Michael Murdock |
+| `marvel-hawkeye` | Hawkeye | Marvel Comics | Clinton Francis Barton | Tales of Suspense #57 | Clinton Francis Barton |
+| `marvel-cyclops` | Cyclops | Marvel Comics | Scott Summers | X-Men #1 | Scott Summers |
+| `marvel-silver` | Silver Surfer | Marvel Comics | Norrin Radd | The Fantastic Four #48 | Norrin Radd |
 
 <Note>
   The Marvel heroes share the same six-field shape as DC heroes. Their ids, images, and data entries follow the exact same conventions described above. Adding a 21st hero means appending one object to the `heroes` array and placing the corresponding `{id}.jpg` in `public/heroes/`.

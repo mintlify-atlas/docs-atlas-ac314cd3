@@ -1,5 +1,5 @@
 ---
-title: "Authentication System in Heroes App Explained"
+title: "How Heroes App Authentication and Route Guards Work"
 sidebarTitle: "Authentication"
 description: "Learn how Heroes App handles auth using React Context, useReducer, and localStorage — no backend required, with full route protection."
 ---
@@ -102,15 +102,13 @@ export const AuthProvider = ({ children }) => {
 
   const login = (name = "") => {
     const user = { id: "123", name };
-    const action = { type: types.login, payload: user };
     localStorage.setItem("user", JSON.stringify(user));
-    dispatch(action);
+    dispatch({ type: types.login, payload: user });
   };
 
   const logout = () => {
     localStorage.removeItem("user");
-    const action = { type: types.logout };
-    dispatch(action);
+    dispatch({ type: types.logout });
   };
 
   return (
@@ -175,8 +173,7 @@ export const PrivateRoute = ({ children }) => {
   const { logged } = useContext(AuthContext);
   const { pathname, search } = useLocation();
 
-  const lastPath = pathname + search;
-  localStorage.setItem("lastPath", lastPath);
+  localStorage.setItem("lastPath", pathname + search);
 
   return logged ? children : <Navigate to="/login" />;
 };
